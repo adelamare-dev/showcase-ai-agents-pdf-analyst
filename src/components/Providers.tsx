@@ -16,7 +16,16 @@ const RENDERERS = [
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CopilotKit runtimeUrl="/api/copilotkit" renderActivityMessages={RENDERERS}>
+    /* enableInspector={false}: the dev Inspector auto-mounts on localhost and
+     * issues GET {runtimeUrl}/threads?agentId=<id> for every declared agent on
+     * each mount / reload / HMR reconnect. single-route mode only serves the
+     * POST envelope, so those calls are structural 404s, re-logged as a burst
+     * on every page load (see SETUP/2026-10-27-orchestration-loop/AUDIT.md). */
+    <CopilotKit
+      runtimeUrl="/api/copilotkit"
+      renderActivityMessages={RENDERERS}
+      enableInspector={false}
+    >
       {children}
     </CopilotKit>
   );

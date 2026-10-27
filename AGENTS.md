@@ -29,6 +29,8 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 - **L'agent `default` est requis** par le client CopilotKit V2 (hooks sans `agentId`) ; il est aliasé sur `fixed_agent`. Ne pas le retirer.
 - **Windows `MAX_PATH`** : Turbopack échoue en `Module not found` dès qu'un chemin résolu sous `node_modules/.pnpm` dépasse 260 caractères. Le chemin du clone actuel est déjà proche de la limite.
 - **`turbopack.root` est épinglé** dans `next.config.ts` : sans lui, Turbopack remonte vers un lockfile ou un `pnpm-workspace.yaml` parent et ne résout plus les `node_modules` de l'app.
+- **`enableInspector={false}` est voulu** (`src/components/Providers.tsx`). L'Inspector de dev se monte par défaut sur localhost et appelle `GET /api/copilotkit/threads?agentId=*` — endpoint multi-route inexistant en `single-route` → salve de 3×404 + annonces CDN + télémétrie à chaque montage/rechargement/reconnexion HMR. Le réactiver fait revenir la salve (audit : `SETUP/2026-10-27-orchestration-loop/`).
+- **Cache Turbopack dev périmé = boots froids** (mesuré sur Windows). Si chaque `sfw pnpm dev` recompile à froid (~15-25 s/page au 1ᵉʳ hit), vider `.next/dev/cache/turbopack` : un cache périmé/enflé ne restaure rien, un cache frais redonne des boots ~2 s. Ne pas mélanger `next build` et `next dev` sur le même `.next`. Vérif : `node SETUP/2026-10-27-orchestration-loop/evidence/probe-orchestration.mjs` (verdict D ≤ 5000 ms).
 
 ## Conventions qui s'écartent de l'évidence
 
