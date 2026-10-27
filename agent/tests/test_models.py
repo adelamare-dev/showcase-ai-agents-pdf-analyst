@@ -13,16 +13,20 @@ from src.models import (
 def test_chat_model_pins_mistral_params():
     m = chat_model(RENDER_MODEL)
     assert isinstance(m, ChatMistralAI)
-    assert m.model == "mistral-large-2512"
+    assert m.model == "ministral-3b-2512"
     assert m.temperature == 0
     assert m.max_retries == 1
     assert REQUEST_TIMEOUT_S == 45
     assert m.timeout == REQUEST_TIMEOUT_S
 
 
+def test_agent_model_is_ministral_3b():
+    assert AGENT_MODEL == "ministral-3b-2512"
+
+
 def test_call_sites_use_expected_models():
-    assert dynamic_agent._RENDER_MODEL.model == "mistral-large-2512"
-    assert pdf_tools._EXTRACTOR.model == "mistral-small-2603"
+    assert dynamic_agent._RENDER_MODEL.model == "ministral-3b-2512"
+    assert pdf_tools._EXTRACTOR.model == "ministral-3b-2512"
 
 
 def test_no_latest_alias():
