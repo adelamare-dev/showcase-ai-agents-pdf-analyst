@@ -177,7 +177,7 @@ wheels = [
 
 [[package]]
 name = "copilotkit"
-version = "0.1.90"
+version = "0.1.93"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ag-ui-langgraph", extra = ["fastapi"] },
@@ -189,9 +189,9 @@ dependencies = [
     { name = "pydantic-core" },
     { name = "toml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/be/5b2d6bbc132d32be8317fb304a153f03242ac3410218275e7dd0926c0b81/copilotkit-0.1.90.tar.gz", hash = "sha256:f18f4f989cbd2ad81a25bd1b89882e8ca08fcb64386daabbfcbe610afea57cb8", size = 40698, upload-time = "2026-05-21T15:22:18.472Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/e8/7e89dadd6fe07ea81c8d750715b48328996b19cd66c17a398d1683f89942/copilotkit-0.1.93.tar.gz", hash = "sha256:0cfa9c19f82c8d9b425298c795b14174ce44d6de1d38d988af24188c71b1f13c", size = 46575, upload-time = "2026-05-29T05:19:54.445Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/ab/9383a3dbcecdb2985ed4b13ffdaf88edc3acbf616b7749aa5d6c4c735e6d/copilotkit-0.1.90-py3-none-any.whl", hash = "sha256:71cef793d5ff16ada793018c380a13331d778490894b9489e747c6b20c28592d", size = 49715, upload-time = "2026-05-21T15:22:17.285Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/48/b5ee9cab38db9f7722afdd0520b341f19292536f235eadb847d50cb6b090/copilotkit-0.1.93-py3-none-any.whl", hash = "sha256:6c86d8ac5e2f50271c5b8ec189db3042a064a576cbfe7d57e18ccde20428c4b2", size = 55451, upload-time = "2026-05-29T05:19:53.44Z" },
 ]
 
 [[package]]
