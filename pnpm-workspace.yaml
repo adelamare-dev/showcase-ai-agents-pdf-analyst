@@ -1,0 +1,33 @@
+# Standalone project: this file makes the app its own workspace root.
+
+# Versions published without provenance after earlier releases had it, and
+# with no trusted successor inside the range their dependents accept:
+# - pino@9.14.0 is the last 9.x, required by @copilotkit/runtime (^9)
+# - undici-types@6.21.0 is pinned by @types/node@20 (~6.21.0)
+# Pinned to exact versions so any future release is still checked.
+trustPolicyExclude:
+  - pino@9.14.0
+  - undici-types@6.21.0
+
+# Dependency build scripts, reviewed explicitly so strictDepBuilds can pass.
+allowBuilds:
+  esbuild: true
+  # Download telemetry only; nothing to build.
+  "@scarf/scarf": false
+  # Ships prebuilt @img/sharp-* binaries; the script is a compile-from-source fallback.
+  sharp: false
+
+# Cooldown : aucune version âgée de moins de 7 jours n'est résoluble
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true # échec plutôt que fallback immature
+minimumReleaseAgeIgnoreMissingTime: false
+
+trustPolicy: no-downgrade # bloque les releases à confiance dégradée
+blockExoticSubdeps: true # bloque les sub-deps git/tarball profondes
+trustLockfile: false # re-vérifie la politique à chaque install
+
+strictDepBuilds: true # builds de deps non approuvées = échec
+dangerouslyAllowAllBuilds: false # jamais de postinstall global
+
+audit:
+  level: high
