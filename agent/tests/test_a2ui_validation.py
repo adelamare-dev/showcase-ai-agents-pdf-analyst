@@ -37,6 +37,8 @@ def _text(**extra):
         ),
         ([_text(), _text()], "root"),
         ("oops", "list"),
+        ([{"id": "root", "component": ["Text"]}], "type"),
+        ([{"id": ["x"], "component": "Text"}], "id"),
     ],
 )
 def test_validate_components(components, expected):

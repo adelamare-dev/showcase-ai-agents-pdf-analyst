@@ -146,12 +146,12 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
         )
 
     surface_id = args.get("surfaceId", "dynamic-surface")
-    catalog_id = args.get("catalogId", CATALOG_ID)
+    # Only one catalog exists; a model-supplied catalogId is ignored.
     components = args["components"]
     data = args.get("data", {})
 
     ops = [
-        a2ui.create_surface(surface_id, catalog_id=catalog_id),
+        a2ui.create_surface(surface_id, catalog_id=CATALOG_ID),
         a2ui.update_components(surface_id, components),
     ]
     if data:

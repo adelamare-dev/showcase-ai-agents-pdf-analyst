@@ -132,3 +132,10 @@ def test_render_model_exception_propagates_without_retry(monkeypatch):
     with pytest.raises(RuntimeError, match="429"):
         dynamic_agent.generate_a2ui.func(fake_runtime(_history()))
     assert len(stub.calls) == 1
+
+
+def test_model_supplied_catalog_id_is_ignored(monkeypatch):
+    call = _render_call()
+    call.tool_calls[0]["args"]["catalogId"] = "https://example.invalid/other"
+    _, ops = _run_scripted(monkeypatch, [call])
+    assert ops[0]["createSurface"]["catalogId"] == CATALOG_ID

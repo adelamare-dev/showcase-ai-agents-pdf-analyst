@@ -23,7 +23,7 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 
 ## Pièges
 
-- **Catalogue A2UI en double.** Le schéma et les renderers vivent côté TS (`src/a2ui/catalog/definitions.ts`, `renderers.tsx`) ; le LLM ne voit que `agent/src/catalog.py` (`CATALOG_PROMPT`). Ajouter ou modifier un composant = toucher les trois, et `CATALOG_ID` doit rester identique des deux côtés. (La docstring de `catalog.py` cite `web/src/...`, chemin périmé.)
+- **Catalogue A2UI en double.** Le schéma et les renderers vivent côté TS (`src/a2ui/catalog/definitions.ts`, `renderers.tsx`) ; le LLM ne voit que `agent/src/catalog.py` (`CATALOG_PROMPT`). Ajouter ou modifier un composant = toucher les trois, et `CATALOG_ID` doit rester identique des deux côtés. Côté Python, les noms de composants valides sont **dérivés** des lignes `- **Nom**` de `CATALOG_PROMPT` par `agent/src/a2ui_validation.py` : changer ce format casse la validation. Les props ne sont validées que par Zod côté client.
 - **Zod doit rester en v3** (même majeure que `@copilotkit/a2ui-renderer`). En v4, le binder classe silencieusement toutes les props en STATIC et les objets `{path}` arrivent bruts dans les renderers.
 - **`injectA2UITool: false` est voulu** (`src/app/api/copilotkit/route.ts`). Le réactiver laisse des `tool_calls` orphelins dans l'état de l'agent → `INCOMPLETE_STREAM` au 2ᵉ tour. Le middleware A2UI rend quand même les `a2ui_operations` renvoyées par `generate_a2ui`.
 - **L'agent `default` est requis** par le client CopilotKit V2 (hooks sans `agentId`) ; il est aliasé sur `fixed_agent`. Ne pas le retirer.

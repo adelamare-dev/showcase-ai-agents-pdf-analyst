@@ -60,7 +60,7 @@ def validate_components(components: object) -> list[str]:
         else:
             ids.add(component_id)
         kind = item.get("component")
-        if kind not in CATALOG_COMPONENTS:
+        if not isinstance(kind, str) or kind not in CATALOG_COMPONENTS:
             errors.append(
                 f"Component '{component_id}' has unknown type '{kind}'; "
                 "use only components from the catalog."
