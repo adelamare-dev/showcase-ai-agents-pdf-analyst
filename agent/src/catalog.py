@@ -1,6 +1,6 @@
 """The custom A2UI catalog. Python mirror.
 
-This must stay in sync with web/src/a2ui/catalog/definitions.ts. Only the
+This must stay in sync with src/a2ui/catalog/definitions.ts. Only the
 catalog ID and the component prop summary live here; the JSON Schema for each
 component is owned by the frontend (it's where the renderers are).
 

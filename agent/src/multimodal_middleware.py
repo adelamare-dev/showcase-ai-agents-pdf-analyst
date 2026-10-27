@@ -9,14 +9,14 @@ exposes. It builds a data URL like::
 
     data:text/plain;base64,<source.value>
 
-For images this works (OpenAI knows what `data:image/png;base64,...` is).
+For images this works (a `data:image/png;base64,...` URL is a valid image).
 For documents it doesn't:
 
   - `source.value` is our raw PDF text. NOT base64. so the data URL is
     malformed.
-  - Even if it were valid base64, OpenAI's `image_url` parser won't accept
-    a `text/plain` mime type. The request 400s and the agent run dies with
-    `INCOMPLETE_STREAM`.
+  - Even if it were valid base64, an `image_url` block is only meant for
+    images and a `text/plain` data URL is not one. The request 400s and the
+    agent run dies with `INCOMPLETE_STREAM`.
 
 ## The fix
 
@@ -34,13 +34,8 @@ from __future__ import annotations
 from typing import Any, List
 
 from ag_ui.core import (
-    AudioInputContent,
-    BinaryInputContent,
     DocumentInputContent,
-    ImageInputContent,
     InputContentDataSource,
-    TextInputContent,
-    VideoInputContent,
 )
 from ag_ui_langgraph import utils as _utils
 

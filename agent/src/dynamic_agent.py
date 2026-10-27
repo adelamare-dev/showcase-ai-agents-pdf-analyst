@@ -7,11 +7,11 @@ inventing the UI for the answer using our custom catalog.
 
 The first cut wired things up to use the JS-runtime-injected `render_a2ui`
 frontend tool. That works on turn 1 but leaves an orphan
-`function_call` in agent state (CopilotKitMiddleware strips frontend
+tool call in agent state (CopilotKitMiddleware strips frontend
 tool calls in `after_model` and restores them in `after_agent`. between
 those two phases ToolNode never sees the call, so no `ToolMessage` is
-ever produced). The result is turn 2 hitting OpenAI's Responses API
-with an unanswered function_call → INCOMPLETE_STREAM / "terminated".
+ever produced). The result is turn 2 hitting the model API with an
+unanswered tool call → INCOMPLETE_STREAM / "terminated".
 
 The CopilotKit reference example in
 `CopilotKit/examples/integrations/langgraph-python` solves this by
@@ -29,7 +29,7 @@ The JS-side a2ui middleware detects `a2ui_operations` in the
 TOOL_CALL_RESULT and emits the ACTIVITY_SNAPSHOT events the canvas
 listens for. No frontend tool stripping. No orphan. No turn-2 crash.
 
-`web/src/app/api/copilotkit/route.ts` sets `injectA2UITool: false` to
+`src/app/api/copilotkit/route.ts` sets `injectA2UITool: false` to
 match.
 """
 
@@ -43,10 +43,10 @@ from langchain.agents import create_agent
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool as lc_tool
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
+from src.models import AGENT_MODEL, RENDER_MODEL, chat_model
 from src.pdf_tools import query_pdf
 
 
@@ -72,7 +72,7 @@ def render_a2ui(
     return "rendered"
 
 
-_RENDER_MODEL = ChatOpenAI(model="gpt-5.5", temperature=0)
+_RENDER_MODEL = chat_model(RENDER_MODEL)
 
 
 @tool()
@@ -221,7 +221,7 @@ above. Skip charts unless the user explicitly asked for data viz.
 
 def build_dynamic_agent():
     return create_agent(
-        model="openai:gpt-5.5",
+        model=chat_model(AGENT_MODEL),
         tools=[query_pdf, generate_a2ui],
         middleware=[CopilotKitMiddleware()],
         system_prompt=SYSTEM_PROMPT,

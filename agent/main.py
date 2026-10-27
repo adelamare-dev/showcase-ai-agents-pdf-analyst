@@ -1,6 +1,6 @@
 """FastAPI server exposing two AG-UI agents:
 
-  POST /fixed/   . multi-step launch wizard using fixed A2UI schemas
+  POST /fixed/   . fixed-schema PDF dashboard using fixed A2UI schemas
   POST /dynamic/ . dynamic A2UI surfaces generated at runtime
 
 Run with:  uvicorn main:app --port 8123 --reload
@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 # Patch ag-ui-langgraph's multimodal converter so PDF text shipped via
-# CopilotChat attachments survives the trip to OpenAI. Must run BEFORE
+# CopilotChat attachments survives the trip to the model API. Must run BEFORE
 # the agent graphs are imported so the agents pick up the patched
 # converter at first message conversion.
 from src.multimodal_middleware import install as _install_doc_inlining  # noqa: E402
@@ -50,7 +50,7 @@ add_langgraph_fastapi_endpoint(
     app=app,
     agent=LangGraphAGUIAgent(
         name="fixed_agent",
-        description="Multi-step launch wizard with fixed A2UI schemas.",
+        description="Fixed-schema PDF dashboard with fixed A2UI schemas.",
         graph=fixed_graph,
         config=_AGENT_CONFIG,
     ),

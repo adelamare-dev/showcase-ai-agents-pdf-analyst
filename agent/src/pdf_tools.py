@@ -7,10 +7,11 @@ import re
 from typing import TypedDict
 
 from langchain.tools import tool
-from langchain_openai import ChatOpenAI
+
+from src.models import EXTRACTOR_MODEL, chat_model
 
 # We keep the extractor model cheap; this is structured JSON work, not chat.
-_EXTRACTOR = ChatOpenAI(model="gpt-5.5", temperature=0)
+_EXTRACTOR = chat_model(EXTRACTOR_MODEL)
 
 
 class Kpi(TypedDict):
