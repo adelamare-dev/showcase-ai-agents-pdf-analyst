@@ -22,14 +22,21 @@ All three routes share the same brand tokens (`src/a2ui/theme.css`), the same Re
 ## Run locally
 
 ```bash
-git clone https://github.com/CopilotKit/CopilotKit.git
-cd CopilotKit/examples/showcases/a2ui-pdf-analyst
+git clone https://github.com/adelamare-dev/showcase-ai-agents-pdf-analyst.git
+cd showcase-ai-agents-pdf-analyst
 cp agent/.env.example agent/.env    # then put your OPENAI_API_KEY in agent/.env
 pnpm install                         # installs Next.js + runs `uv sync` for the agent
 pnpm dev                             # boots web on :3000, agent on :8123
 ```
 
 Open <http://localhost:3000>. `npm install && npm run dev` works identically.
+
+**Windows:** keep the clone path short (around 100 characters or less). pnpm's
+store paths under `node_modules/.pnpm` add up to ~135 characters, and Turbopack
+fails with `Module not found` once a resolved path exceeds 260 characters
+(`MAX_PATH`) while Windows long paths are disabled.
+
+Originally published in [CopilotKit/CopilotKit](https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/a2ui-pdf-analyst) (MIT, see `LICENSE`).
 
 ## Environment variables
 
