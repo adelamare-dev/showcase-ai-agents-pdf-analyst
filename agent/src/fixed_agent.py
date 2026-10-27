@@ -19,6 +19,7 @@ from langchain.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
+from src.errors import MistralErrorMiddleware
 from src.models import AGENT_MODEL, chat_model
 
 SCHEMA_DIR = Path(__file__).parent / "a2ui" / "schemas"
@@ -182,8 +183,9 @@ def build_fixed_agent():
         model=chat_model(AGENT_MODEL),
         tools=[render_dashboard],
         # CopilotKitMiddleware forwards frontend tools + agent context (e.g.
-        # useAgentContext payloads) to the LLM.
-        middleware=[CopilotKitMiddleware()],
+        # useAgentContext payloads) to the LLM. MistralErrorMiddleware stays
+        # after it so it sits closest to the model call.
+        middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
         system_prompt=SYSTEM_PROMPT,
         checkpointer=MemorySaver(),
     )
