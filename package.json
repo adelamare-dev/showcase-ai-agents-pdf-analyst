@@ -14,6 +14,7 @@
     "dev:agent": "cd agent && uv run uvicorn main:app --port 8123 --reload",
     "build": "next build",
     "start": "next start",
+    "lint": "eslint .",
     "install:agent": "cd agent && uv sync",
     "postinstall": "pnpm run install:agent"
   },
@@ -38,6 +39,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "concurrently": "^9.2.1",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

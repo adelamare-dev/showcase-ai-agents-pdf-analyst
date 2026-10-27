@@ -4,10 +4,13 @@
 # with no trusted successor inside the range their dependents accept:
 # - pino@9.14.0 is the last 9.x, required by @copilotkit/runtime (^9)
 # - undici-types@6.21.0 is pinned by @types/node@20 (~6.21.0)
+# - semver@6.3.1 is the last 6.x, required by eslint-plugin-import (^6.3.1)
+#   via eslint-config-next
 # Pinned to exact versions so any future release is still checked.
 trustPolicyExclude:
   - pino@9.14.0
   - undici-types@6.21.0
+  - semver@6.3.1
 
 # Dependency build scripts, reviewed explicitly so strictDepBuilds can pass.
 allowBuilds:
@@ -16,6 +19,8 @@ allowBuilds:
   "@scarf/scarf": false
   # Ships prebuilt @img/sharp-* binaries; the script is a compile-from-source fallback.
   sharp: false
+  # Ships prebuilt @unrs/resolver-binding-* binaries; the script only fetches one when missing.
+  unrs-resolver: false
 
 # Cooldown : aucune version âgée de moins de 7 jours n'est résoluble
 minimumReleaseAge: 10080
