@@ -54,4 +54,6 @@ __pycache__/
 *.pem
 
 # LLM
+.playwright-mcp
+.playwright
 SETUP
