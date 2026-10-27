@@ -47,10 +47,12 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 
 ## Vérification
 
-Niveau par défaut : **standard**. Il n'existe aucune suite de tests.
+Niveau par défaut : **standard**.
+
+- Agent Python : `cd agent && uv run pytest` (modèles factices, aucun appel réseau).
 
 - Renderers et catalogue : `/catalog` affiche les 21 composants sans appeler l'agent.
-- Flux agent (`/fixed`, `/dynamic`) : démonstration réelle avec un PDF attaché. Il faut `OPENAI_API_KEY` dans `agent/.env`, et chaque essai consomme des tokens.
+- Flux agent (`/fixed`, `/dynamic`) : démonstration réelle avec un PDF attaché. Il faut `MISTRAL_API_KEY` dans `agent/.env`, et chaque essai consomme des tokens.
 
 ## Rétrospectives
 
