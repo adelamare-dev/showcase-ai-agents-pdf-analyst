@@ -17,7 +17,7 @@ import { extractPdfText } from "@/lib/pdf";
 const AGENT_ID = "dynamic_agent";
 
 export default function DynamicPage() {
-  const { agent: _agent } = useAgent({ agentId: AGENT_ID });
+  useAgent({ agentId: AGENT_ID });
   const [loaded, setLoaded] = useState<{
     filename: string;
     pages: number;

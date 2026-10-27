@@ -117,6 +117,9 @@ function CanvasInner({
     if (initial.ops.length) {
       applyOps(initial.ops as never);
       seenRef.current = initial.ops.length;
+      // The buffered ops must reach the A2UI processor before the renderer
+      // mounts this surface, so the id is only exposed after the replay.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSurfaceId(initial.surfaceId);
     }
     return surfaceBus.subscribe(channel, (snap) => {

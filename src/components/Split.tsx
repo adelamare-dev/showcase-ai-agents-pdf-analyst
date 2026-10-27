@@ -1,7 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { clsx } from "clsx";
+
+// Only fires for writes from other tabs; same-tab writes are picked up by the
+// re-render that ends the drag.
+function subscribeStorage(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
 
 /**
  * Two-pane horizontal layout with a draggable gutter (VS Code-style).
@@ -29,33 +42,33 @@ export function Split({
   initialLeftFraction?: number;
   minFraction?: number;
 }) {
-  const [fraction, setFraction] = useState<number>(initialLeftFraction);
-  const [hydrated, setHydrated] = useState(false);
-  const [dragging, setDragging] = useState(false);
+  // The server snapshot is null, so the server render and hydration both use
+  // `initialLeftFraction`; the stored value takes over right after hydration.
+  const stored = useSyncExternalStore(
+    subscribeStorage,
+    () => window.localStorage.getItem(persistKey),
+    () => null,
+  );
+  const n = stored ? Number(stored) : NaN;
+  const persisted =
+    !Number.isNaN(n) && n >= minFraction && n <= 1 - minFraction
+      ? n
+      : initialLeftFraction;
+
+  // Non-null only while the gutter is being dragged.
+  const [dragFraction, setDragFraction] = useState<number | null>(null);
+  const dragging = dragFraction !== null;
+  const fraction = dragFraction ?? persisted;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Hydrate from localStorage after mount (avoid SSR mismatch).
-  useEffect(() => {
-    const raw = window.localStorage.getItem(persistKey);
-    if (raw) {
-      const n = Number(raw);
-      if (!Number.isNaN(n) && n >= minFraction && n <= 1 - minFraction) {
-        setFraction(n);
-      }
-    }
-    setHydrated(true);
-  }, [persistKey, minFraction]);
-
-  useEffect(() => {
-    if (!hydrated || dragging) return;
-    window.localStorage.setItem(persistKey, String(fraction));
-  }, [fraction, hydrated, dragging, persistKey]);
-
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    setDragging(true);
-  }, []);
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+      setDragFraction(fraction);
+    },
+    [fraction],
+  );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -63,19 +76,25 @@ export function Split({
       const rect = containerRef.current.getBoundingClientRect();
       const raw = (e.clientX - rect.left) / rect.width;
       const next = Math.min(1 - minFraction, Math.max(minFraction, raw));
-      setFraction(next);
+      setDragFraction(next);
     },
     [dragging, minFraction],
   );
 
-  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    try {
-      (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* releasePointerCapture can throw if not captured. ignore */
-    }
-    setDragging(false);
-  }, []);
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      try {
+        (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* releasePointerCapture can throw if not captured. ignore */
+      }
+      if (dragFraction !== null) {
+        window.localStorage.setItem(persistKey, String(dragFraction));
+      }
+      setDragFraction(null);
+    },
+    [dragFraction, persistKey],
+  );
 
   useEffect(() => {
     if (!dragging) return;
