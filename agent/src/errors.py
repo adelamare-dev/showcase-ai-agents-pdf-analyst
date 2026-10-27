@@ -10,10 +10,14 @@ timeouts and connection failures surface as `httpx` transport errors. Anything
 else is not ours to handle and is re-raised unchanged.
 
 Messages never carry the exception text: it can include the request URL.
+Each mapped error is logged once as a warning for the operator. The log line
+holds the exception class, the HTTP status and the Mistral error type and code;
+it never holds request headers, the API key or a traceback.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -23,11 +27,18 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 TOOL_ERROR_PREFIX = "MISTRAL_ERROR: "
 
+logger = logging.getLogger(__name__)
+
 _QUOTA = "Quota Mistral atteint, réessayez dans un instant."
 _AUTH = "Clé Mistral invalide ou absente."
+_FORBIDDEN = (
+    "Ce modèle Mistral n'est pas accessible avec cette clé (offre insuffisante)."
+)
 _TIMEOUT = "Mistral met trop de temps à répondre, réessayez."
 _CONNECT = "Impossible de joindre Mistral."
 _OTHER = "Mistral a renvoyé une erreur, réessayez."
+
+_BODY_EXCERPT_CHARS = 200
 
 
 def french_error_message(exc: BaseException) -> str | None:
@@ -36,8 +47,10 @@ def french_error_message(exc: BaseException) -> str | None:
         status = exc.response.status_code
         if status == 429:
             return _QUOTA
-        if status in (401, 403):
+        if status == 401:
             return _AUTH
+        if status == 403:
+            return _FORBIDDEN
         return _OTHER
     if isinstance(exc, httpx.TimeoutException):
         return _TIMEOUT
@@ -59,7 +72,7 @@ class MistralErrorMiddleware(AgentMiddleware):
         try:
             return handler(request)
         except Exception as exc:
-            message = french_error_message(exc)
+            message = _mapped_message(exc)
             if message is None:
                 raise
             return AIMessage(content=message)
@@ -70,7 +83,7 @@ class MistralErrorMiddleware(AgentMiddleware):
         try:
             return await handler(request)
         except Exception as exc:
-            message = french_error_message(exc)
+            message = _mapped_message(exc)
             if message is None:
                 raise
             return AIMessage(content=message)
@@ -79,7 +92,7 @@ class MistralErrorMiddleware(AgentMiddleware):
         try:
             return handler(request)
         except Exception as exc:
-            message = french_error_message(exc)
+            message = _mapped_message(exc)
             if message is None:
                 raise
             return _tool_error(request, message)
@@ -90,7 +103,7 @@ class MistralErrorMiddleware(AgentMiddleware):
         try:
             return await handler(request)
         except Exception as exc:
-            message = french_error_message(exc)
+            message = _mapped_message(exc)
             if message is None:
                 raise
             return _tool_error(request, message)
@@ -114,3 +127,40 @@ def _tool_error(request: Any, message: str) -> ToolMessage:
         content=TOOL_ERROR_PREFIX + message,
         tool_call_id=request.tool_call["id"],
     )
+
+
+def _mapped_message(exc: Exception) -> str | None:
+    """Map `exc` to a French reply and log it once; None if it is not ours."""
+    message = french_error_message(exc)
+    if message is not None:
+        _log_mapped_error(exc)
+    return message
+
+
+def _log_mapped_error(exc: BaseException) -> None:
+    status = None
+    detail = ""
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        detail = _provider_detail(exc.response)
+    logger.warning(
+        "Mapped Mistral error: %s status=%s%s",
+        type(exc).__name__,
+        status,
+        f" {detail}" if detail else "",
+    )
+
+
+def _provider_detail(response: httpx.Response) -> str:
+    """Mistral error type and code from the JSON body, else a body excerpt."""
+    try:
+        text = response.text
+    except Exception:  # unread streamed body: logging must never fail the run
+        return ""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict) and ("type" in payload or "code" in payload):
+        return f"type={payload.get('type')!r} code={payload.get('code')!r}"
+    return f"body={text[:_BODY_EXCERPT_CHARS]!r}"

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from types import SimpleNamespace
 
 import httpx
@@ -27,7 +28,7 @@ def status_error(code: int) -> httpx.HTTPStatusError:
     [
         (status_error(429), "Quota Mistral"),
         (status_error(401), "Clé Mistral"),
-        (status_error(403), "Clé Mistral"),
+        (status_error(403), "offre insuffisante"),
         (status_error(500), "erreur"),
         (httpx.ReadTimeout("slow"), "trop de temps"),
         (httpx.ConnectError("down"), "joindre"),
@@ -121,6 +122,89 @@ def test_tool_error_returns_french_message_and_stops():
     assert isinstance(final, AIMessage)
     assert final.content == french_error_message(status_error(429))
     assert TOOL_ERROR_PREFIX not in final.content
+
+
+def test_forbidden_is_not_reported_as_a_bad_key():
+    assert "Clé Mistral" not in french_error_message(status_error(403))
+    assert "Clé Mistral" in french_error_message(status_error(401))
+
+
+def provider_error(code: int, body: bytes) -> httpx.HTTPStatusError:
+    request = httpx.Request(
+        "POST", API_URL, headers={"Authorization": "Bearer secret-test-key"}
+    )
+    response = httpx.Response(code, request=request, content=body)
+    return httpx.HTTPStatusError(
+        f"Client error '{code}' for url '{API_URL}'", request=request, response=response
+    )
+
+
+def _warnings(caplog):
+    return [r for r in caplog.records if r.levelno == logging.WARNING]
+
+
+def test_mapped_error_logs_one_warning_with_status_type_and_code(caplog):
+    exc = provider_error(429, b'{"type":"rate_limited","code":"1300"}')
+    caplog.set_level(logging.WARNING)
+
+    def handler(request):
+        raise exc
+
+    MistralErrorMiddleware().wrap_model_call(model_request(), handler)
+
+    records = _warnings(caplog)
+    assert len(records) == 1
+    assert "429" in records[0].getMessage()
+    assert "rate_limited" in records[0].getMessage()
+    assert "1300" in records[0].getMessage()
+
+
+def test_logged_warning_never_carries_the_authorization_header(caplog):
+    exc = provider_error(429, b'{"type":"rate_limited","code":"1300"}')
+    caplog.set_level(logging.WARNING)
+
+    def handler(request):
+        raise exc
+
+    MistralErrorMiddleware().wrap_model_call(model_request(), handler)
+
+    assert "secret-test-key" not in caplog.text
+
+
+def test_unparseable_body_is_logged_truncated_to_200_chars(caplog):
+    caplog.set_level(logging.WARNING)
+
+    def handler(request):
+        raise provider_error(500, b"<html>" + b"x" * 500 + b"</html>")
+
+    MistralErrorMiddleware().wrap_model_call(model_request(), handler)
+    (record,) = _warnings(caplog)
+    message = record.getMessage()
+    assert "<html>" in message
+    assert "</html>" not in message
+    assert "500" in message
+
+
+def test_unmapped_error_is_not_logged(caplog):
+    caplog.set_level(logging.WARNING)
+
+    def handler(request):
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError):
+        MistralErrorMiddleware().wrap_model_call(model_request(), handler)
+    assert _warnings(caplog) == []
+
+
+def test_tool_path_logs_one_warning(caplog):
+    caplog.set_level(logging.WARNING)
+
+    def handler(request):
+        raise provider_error(429, b'{"type":"rate_limited","code":"1300"}')
+
+    MistralErrorMiddleware().wrap_tool_call(tool_request(), handler)
+    (record,) = _warnings(caplog)
+    assert "rate_limited" in record.getMessage()
 
 
 def test_async_tool_error_returns_prefixed_message():
