@@ -2,6 +2,12 @@
   "name": "a2ui-pdf-analyst",
   "version": "0.1.0",
   "private": true,
+  "description": "PDF Analyst (Showcase) - Multi-agent orchestration",
+  "author": {
+    "name": "Antoine Delamare",
+    "email": "antoine@blockchain-cie.com",
+    "url": "https://www.linkedin.com/in/adelamare/"
+  },
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names \"web,agent\" --prefix-colors \"magenta,cyan\" \"pnpm:dev:web\" \"pnpm:dev:agent\"",
     "dev:web": "next dev",
