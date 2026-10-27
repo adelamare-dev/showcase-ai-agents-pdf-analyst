@@ -1,0 +1,63 @@
+import pytest
+from langchain_core.messages import ToolMessage
+
+from src.a2ui_validation import (
+    CATALOG_COMPONENTS,
+    fallback_components,
+    validate_components,
+)
+
+
+def test_component_names_match_catalog():
+    assert len(CATALOG_COMPONENTS) == 21
+    assert {"Stack", "DataTable", "ChoiceChips", "Callout"} <= CATALOG_COMPONENTS
+
+
+def _text(**extra):
+    return {"id": "root", "component": "Text", "text": "x", **extra}
+
+
+@pytest.mark.parametrize(
+    ("components", "expected"),
+    [
+        ([_text()], None),
+        ([{"id": "a", "component": "Text", "text": "x"}], "root"),
+        ([{"id": "root", "component": "Sankey"}], "Sankey"),
+        ([{"id": "root", "component": "Stack", "children": ["missing"]}], "missing"),
+        ([{"id": "root", "component": "Card", "child": "missing"}], "missing"),
+        (
+            [
+                {
+                    "id": "root",
+                    "component": "Stack",
+                    "children": {"componentId": "missing", "path": "/items"},
+                }
+            ],
+            "missing",
+        ),
+        ([_text(), _text()], "root"),
+        ("oops", "list"),
+    ],
+)
+def test_validate_components(components, expected):
+    errors = validate_components(components)
+    if expected is None:
+        assert errors == []
+    else:
+        assert errors
+        assert any(expected in error for error in errors)
+
+
+def test_duplicate_id_is_reported_as_duplicate():
+    errors = validate_components([_text(), {"id": "root", "component": "Text"}])
+    assert any("duplicate" in error.lower() for error in errors)
+
+
+def test_fallback_uses_only_catalog_components():
+    assert validate_components(fallback_components([])) == []
+    query = ToolMessage(
+        name="query_pdf",
+        tool_call_id="q1",
+        content='{"title": "T", "summary": "S"}',
+    )
+    assert validate_components(fallback_components([query])) == []

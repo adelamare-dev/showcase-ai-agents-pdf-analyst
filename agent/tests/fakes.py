@@ -19,6 +19,8 @@ class ScriptedModel:
 
     def _next(self, messages) -> AIMessage:
         self.calls.append(messages)
+        if not self.responses:
+            raise AssertionError("no scripted response left")
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response

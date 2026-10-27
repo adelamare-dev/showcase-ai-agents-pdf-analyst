@@ -31,11 +31,15 @@ listens for. No frontend tool stripping. No orphan. No turn-2 crash.
 
 `src/app/api/copilotkit/route.ts` sets `injectA2UITool: false` to
 match.
+
+The generated components are validated structurally (`src/a2ui_validation.py`).
+An invalid or missing render call is retried once with the rejection reason in
+the system prompt; after two failures a plain text surface is built in Python
+without any model call.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from copilotkit import CopilotKitMiddleware, a2ui
@@ -45,6 +49,7 @@ from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool as lc_tool
 from langgraph.checkpoint.memory import MemorySaver
 
+from src.a2ui_validation import fallback_components, validate_components
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
 from src.models import AGENT_MODEL, RENDER_MODEL, chat_model
@@ -113,15 +118,36 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
     )
 
     model_with_tool = _RENDER_MODEL.bind_tools([render_a2ui], tool_choice="render_a2ui")
-    response = model_with_tool.invoke([SystemMessage(content=prompt), *messages])
 
-    if not response.tool_calls:
-        return json.dumps({"error": "secondary LLM did not call render_a2ui"})
+    # At most two attempts: a malformed or missing render_a2ui call is retried
+    # once with the rejection reason in the system prompt. Provider errors are
+    # not caught here; they propagate to the error middleware.
+    args: dict = {}
+    for attempt in range(2):
+        response = model_with_tool.invoke([SystemMessage(content=prompt), *messages])
+        if response.tool_calls:
+            args = response.tool_calls[0]["args"]
+            errors = validate_components(args.get("components", []))
+        else:
+            errors = ["The model did not call render_a2ui."]
+        if not errors:
+            break
+        prompt += (
+            "\n\nYour previous render_a2ui call was rejected: "
+            f"{' '.join(errors)} Call render_a2ui again with a corrected surface."
+        )
+    else:
+        surface_id = "dynamic-surface"
+        return a2ui.render(
+            operations=[
+                a2ui.create_surface(surface_id, catalog_id=CATALOG_ID),
+                a2ui.update_components(surface_id, fallback_components(messages)),
+            ]
+        )
 
-    args = response.tool_calls[0]["args"]
     surface_id = args.get("surfaceId", "dynamic-surface")
     catalog_id = args.get("catalogId", CATALOG_ID)
-    components = args.get("components", [])
+    components = args["components"]
     data = args.get("data", {})
 
     ops = [
