@@ -32,7 +32,7 @@ def _offline_model() -> ChatMistralAI:
 
     base = chat_model(AGENT_MODEL)
     return ChatMistralAI(
-        model=base.model,
+        model_name=base.model,
         temperature=base.temperature,
         max_retries=0,
         client=httpx.Client(base_url=_BASE_URL, transport=httpx.MockTransport(handler)),

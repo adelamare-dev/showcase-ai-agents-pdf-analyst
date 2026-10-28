@@ -5,6 +5,7 @@ import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.tools import StructuredTool
 
 from src import dynamic_agent
 from src.a2ui_validation import validate_components
@@ -47,10 +48,17 @@ def _history() -> list:
     ]
 
 
+def _generate(messages: list) -> str:
+    """Call the tool body directly, bypassing LangChain's runtime injection."""
+    tool = dynamic_agent.generate_a2ui
+    assert isinstance(tool, StructuredTool) and tool.func is not None
+    return tool.func(fake_runtime(messages))
+
+
 def _run(monkeypatch, messages):
     stub = ScriptedModel([_render_call()])
     monkeypatch.setattr(dynamic_agent, "_RENDER_MODEL", stub)
-    result = dynamic_agent.generate_a2ui.func(fake_runtime(messages))
+    result = _generate(messages)
     return stub, result
 
 
@@ -89,7 +97,7 @@ def _bad_call() -> AIMessage:
 def _run_scripted(monkeypatch, responses, messages=None):
     stub = ScriptedModel(responses)
     monkeypatch.setattr(dynamic_agent, "_RENDER_MODEL", stub)
-    result = dynamic_agent.generate_a2ui.func(fake_runtime(messages or _history()))
+    result = _generate(messages or _history())
     return stub, json.loads(result)["a2ui_operations"]
 
 
@@ -141,7 +149,7 @@ def test_render_model_exception_propagates_without_retry(monkeypatch):
     stub = ScriptedModel([RuntimeError("429")])
     monkeypatch.setattr(dynamic_agent, "_RENDER_MODEL", stub)
     with pytest.raises(RuntimeError, match="429"):
-        dynamic_agent.generate_a2ui.func(fake_runtime(_history()))
+        _generate(_history())
     assert len(stub.calls) == 1
 
 

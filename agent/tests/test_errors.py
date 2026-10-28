@@ -104,7 +104,7 @@ def test_tool_error_returns_french_message_and_stops():
     tool_message = middleware.wrap_tool_call(tool_request(), handler)
     assert isinstance(tool_message, ToolMessage)
     assert tool_message.tool_call_id == "call1"
-    assert tool_message.content.startswith(TOOL_ERROR_PREFIX)
+    assert tool_message.text.startswith(TOOL_ERROR_PREFIX)
 
     state = {
         "messages": [
@@ -117,6 +117,7 @@ def test_tool_error_returns_french_message_and_stops():
         ]
     }
     update = middleware.before_model(state, SimpleNamespace())
+    assert update is not None
     assert update["jump_to"] == "end"
     (final,) = update["messages"]
     assert isinstance(final, AIMessage)
@@ -125,8 +126,10 @@ def test_tool_error_returns_french_message_and_stops():
 
 
 def test_forbidden_is_not_reported_as_a_bad_key():
-    assert "Clé Mistral" not in french_error_message(status_error(403))
-    assert "Clé Mistral" in french_error_message(status_error(401))
+    forbidden = french_error_message(status_error(403))
+    bad_key = french_error_message(status_error(401))
+    assert forbidden and "Clé Mistral" not in forbidden
+    assert bad_key and "Clé Mistral" in bad_key
 
 
 def provider_error(code: int, body: bytes) -> httpx.HTTPStatusError:
@@ -215,7 +218,7 @@ def test_async_tool_error_returns_prefixed_message():
         MistralErrorMiddleware().awrap_tool_call(tool_request(), handler)
     )
     assert tool_message.tool_call_id == "call1"
-    assert tool_message.content.startswith(TOOL_ERROR_PREFIX)
+    assert tool_message.text.startswith(TOOL_ERROR_PREFIX)
 
 
 def test_unmapped_tool_error_is_reraised():
