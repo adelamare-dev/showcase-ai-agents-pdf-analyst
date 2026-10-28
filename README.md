@@ -102,7 +102,7 @@ a2ui-pdf-analyst/
 **Dynamic schema (`/dynamic`)** — five steps per turn:
 
 1. User attaches a PDF and asks a question. Frontend inlines the PDF text into the message.
-2. Agent calls `query_pdf` → a sub-LLM reads the document and returns structured JSON: `shape_hint`, `title`, `summary`, `data`.
+2. Agent calls `query_pdf(question)` → the tool reads the latest attached document from the graph state, and a sub-LLM returns structured JSON: `shape_hint`, `title`, `summary`, `data`.
 3. Agent calls `generate_a2ui` (no arguments) → spawns a second sub-LLM bound to a no-op `render_a2ui` shim with `tool_choice` forced to that shim.
 4. The second LLM's tool-call arguments (surfaceId, catalogId, components, data) become A2UI `create_surface` + `update_components` + `update_data_model` operations.
 5. The JS-side A2UI middleware detects `a2ui_operations` in the tool result and emits the snapshot events the canvas listens for. Surface renders. Agent emits an empty chat message.
