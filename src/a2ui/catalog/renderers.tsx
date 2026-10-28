@@ -427,13 +427,13 @@ const StatCard = ({
         {props.label}
       </span>
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <span className="text-[28px] font-semibold tracking-tight text-[var(--ink)] leading-none tabular-nums">
+        <span className="text-[28px] font-semibold tracking-tight text-[var(--ink)] leading-none tabular-nums whitespace-nowrap">
           {props.value}
         </span>
         {finalDelta && (
           <span
             className={clsx(
-              "mono text-[11px] px-1.5 py-0.5 rounded-md border font-medium tabular-nums inline-flex items-center gap-1",
+              "mono text-[11px] px-1.5 py-0.5 rounded-md border font-medium tabular-nums inline-flex items-center gap-1 whitespace-nowrap",
               deltaClass,
             )}
           >
@@ -767,8 +767,11 @@ const DonutChart = ({
   const height = props.height ?? 240;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-5">
-      <div className="relative shrink-0" style={{ width: height, height }}>
+    <div className="flex flex-wrap items-center justify-center gap-5">
+      <div
+        className="relative shrink-0 max-w-full"
+        style={{ width: height, height }}
+      >
         <ResponsiveContainer>
           <PieChart>
             <Tooltip
@@ -810,7 +813,7 @@ const DonutChart = ({
       </div>
 
       {/* External legend with values */}
-      <ul className="flex-1 min-w-0 flex flex-col gap-1.5">
+      <ul className="flex-1 min-w-[10rem] flex flex-col gap-1.5">
         {data.map((d, i) => {
           const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
           return (
@@ -894,7 +897,7 @@ const DataTable = ({
                     <td
                       key={c.key}
                       className={clsx(
-                        "px-4 py-3 tabular-nums mono text-[12px] font-medium",
+                        "px-4 py-3 tabular-nums mono text-[12px] font-medium whitespace-nowrap",
                         c.align === "right" ? "text-right" : "text-left",
                         tone,
                       )}
@@ -909,7 +912,7 @@ const DataTable = ({
                     className={clsx(
                       "px-4 py-3 text-[var(--ink-2)]",
                       c.align === "right"
-                        ? "text-right tabular-nums mono text-[13px]"
+                        ? "text-right tabular-nums mono text-[13px] whitespace-nowrap"
                         : "text-left",
                     )}
                   >
