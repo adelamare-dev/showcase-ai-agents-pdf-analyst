@@ -104,7 +104,7 @@
     "id": "trend-section",
     "component": "Section",
     "eyebrow": "TENDANCE",
-    "title": "Performance mensuelle",
+    "title": "Évolution",
     "child": "trend-card"
   },
   {
