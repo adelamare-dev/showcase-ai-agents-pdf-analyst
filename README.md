@@ -1,6 +1,6 @@
 # A2UI PDF Analyst
 
-Chat with your PDF and watch the agent build the UI for each answer. Powered by **A2UI v0.9 (Agent-to-UI)** — the open protocol that lets an agent describe a surface as structured component operations your frontend renders against its own design system. Same chat input, two rendering strategies, one shared 21-component catalog.
+Chat with your PDF and watch the agent build the UI for each answer. Powered by **A2UI v0.9 (Agent-to-UI)** — the open protocol that lets an agent describe a surface as structured component operations your frontend renders against its own design system. Same chat input, two rendering strategies, one shared 21-component catalog. The UI, the agent's replies and the surfaces it draws are in French, with fr-FR number formats (`1 234,5`, `6,1 %`, `1,5 M`).
 
 https://github.com/user-attachments/assets/c053d2e8-1d40-43cb-8c5a-8e5c121b851f
 
@@ -11,6 +11,8 @@ https://github.com/user-attachments/assets/c053d2e8-1d40-43cb-8c5a-8e5c121b851f
 - **`/catalog`** — every component rendered live, filterable by group (Layout, Content, Data viz, Interactive). Doubles as a sanity check on the renderers and a reference for what the agent is allowed to draw from.
 
 All three routes share the same brand tokens (`src/a2ui/theme.css`), the same React renderers (`src/a2ui/catalog/renderers.tsx`), and the same client-side PDF text extraction pipeline (`src/lib/pdf.ts`). Re-skin one stylesheet, every surface updates.
+
+Each tool call shows up as a live step in the chat ("Lecture du document…", "Conception de l'interface…") with the name of the model that runs it, and turns into a failure line if the provider rejects the call.
 
 ## Prerequisites
 
@@ -76,12 +78,17 @@ a2ui-pdf-analyst/
 │   │   ├── SurfaceCanvas.tsx        → mounts A2UIProvider + renders surfaces
 │   │   ├── FilteredUserMessage.tsx  → strips inlined PDF text from chat
 │   │   ├── PdfChatChrome.tsx        → truncation status bar + confidentiality note
+│   │   ├── ToolStep.tsx             → live chat step for each tool call
 │   │   ├── SampleBar.tsx            → "Essayer un exemple" + suggested questions
 │   │   ├── FilteredAssistantMessage.tsx → suppresses JSON-shaped agent replies
 │   │   ├── Split.tsx                → VS-Code-style resizable chat/canvas split
 │   │   ├── Providers.tsx            → <CopilotKit> + activity renderers
 │   │   └── Brand.tsx                → SiteNav + PageHeader
 │   └── lib/
+│       ├── agent-steps.ts          → chat step labels per tool, model names, tool-failure check
+│       ├── chat-labels.ts          → French labels for the chat chrome
+│       ├── format.ts               → fr-FR number formatting and amount parsing
+│       ├── upload-errors.ts        → French messages for attachment errors
 │       ├── pdf.ts                  → client-side PDF text extraction (pdfjs-dist) + text cap
 │       ├── use-pdf-attachments.ts  → attachment handling, truncation note
 │       └── samples.ts              → sample catalogue and French suggested questions
@@ -91,7 +98,8 @@ a2ui-pdf-analyst/
     ├── uv.lock
     ├── scripts/measure.py    → latency and token measurement
     └── src/
-        ├── models.py         → model IDs, temperature, retry and timeout (single home)
+        ├── models.py         → model IDs, temperature, retry and timeout (single home); stream adapter for the agent model
+        ├── locale.py         → output-language rule shared by the agent prompts (French, fr-FR formats)
         ├── catalog.py        → CATALOG_ID + system-prompt fragment listing components
         ├── fixed_agent.py    → render_dashboard backend tool
         ├── dynamic_agent.py  → query_pdf + generate_a2ui tools
@@ -105,6 +113,10 @@ a2ui-pdf-analyst/
 **PDF attachment** — CopilotKit's multimodal attachment support lets the user attach a PDF directly in the chat input. The frontend extracts the text client-side via `pdfjs-dist` and inlines it into the user message under a `[Document: <filename>]` header. `multimodal_middleware.py` patches `ag-ui-langgraph` so this text block survives serialization and arrives intact at the model. The `query_pdf` tool itself reads the most recent `[Document: ...]` block from the graph state (the agent only checks that a document exists before calling it) — attach once, ask many questions.
 
 **Text cap** — extraction is capped in the browser at `PDF_TEXT_MAX_CHARS` (60 000 characters, `src/lib/pdf.ts`), cut at a page boundary. When a document is truncated, the status bar shows "Document tronqué : pages 1 à N sur M" and the agent receives the same note. There is no second, server-side truncation: this is the single cap. A PDF with no extractable text (a scan) is refused with an error message. A confidentiality line under the composer reminds users that this is a free-tier demo.
+
+**Live steps** — each tool call renders as a one-line step in the chat (`src/components/ToolStep.tsx`, labels in `src/lib/agent-steps.ts`) showing the model that runs it. Mistral sends a whole tool call in a single chunk, which `ag-ui-langgraph` would drop; the agent model is therefore built by `agent_chat_model()` in `agent/src/models.py`, a stream adapter that splits the call into start, arguments and end so the step appears while the tool runs.
+
+**Language** — the agent answers and writes surface text in French; the rule lives in `agent/src/locale.py`. Numbers are shown fr-FR by `src/lib/format.ts`.
 
 **Samples** — on `/fixed` and `/dynamic`, "Essayer un exemple" loads a bundled PDF and shows clickable French suggested questions that send the question together with the document. Suggestions appear only before the first message and only while the sample is the loaded document.
 
@@ -130,30 +142,30 @@ These work well for the dynamic-schema demo:
 
 ## Prompts to try
 
-On `/dynamic` after attaching a PDF:
+The prompts are in French, like the UI. On `/dynamic` after attaching a PDF:
 
 | Ask the agent                                                                                 | Expected surface                      |
 | --------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `What was net income last quarter?`                                                           | one StatCard                          |
-| `Break iPhone vs Mac vs iPad vs Wearables vs Services as a donut.`                            | DonutChart                            |
-| `Show Q4 net sales by category as horizontal bars.`                                           | HorizontalBarChart                    |
-| `Plot quarterly production against deliveries across the last 5 quarters as a scatter chart.` | ScatterChart                          |
-| `Explain the main idea of this paper in plain English.`                                       | Heading + Text + Callout + BulletList |
-| `Show me the revenue trend over the last 6 quarters.`                                         | LineChart                             |
+| `Quel a été le résultat net du dernier trimestre ?`                                           | one StatCard                          |
+| `Répartis iPhone, Mac, iPad, Wearables et Services dans un graphique en anneau.`              | DonutChart                            |
+| `Montre le chiffre d'affaires du T4 par catégorie en barres horizontales.`                    | HorizontalBarChart                    |
+| `Trace la production face aux livraisons sur les 5 derniers trimestres en nuage de points.`    | ScatterChart                          |
+| `Explique l'idée principale de cet article en termes simples.`                                | Heading + Text + Callout + BulletList |
+| `Montre l'évolution du chiffre d'affaires sur les 6 derniers trimestres.`                     | LineChart                             |
 
 On `/fixed` after attaching a PDF:
 
 | Ask the agent                               | What happens                                                           |
 | ------------------------------------------- | ---------------------------------------------------------------------- |
-| `Render the dashboard.`                     | full dashboard with KPIs, trend chart, share donut, table, scope chips |
-| `Switch scope to FY24.` (or click the chip) | re-renders the same dashboard with FY24 data                           |
+| `Affiche le tableau de bord.`               | full dashboard with KPIs, trend chart, share donut, table, scope chips |
+| `Passe à l'exercice 2024.` (or click the chip "Exercice 2024") | re-renders the same dashboard with fiscal-year data |
 
 ## Development
 
 Model IDs, temperature (0), a single attempt per call (no retry) and a 45 s timeout live in `agent/src/models.py`; the timeout was set from a measurement.
 
 ```bash
-pnpm test:web                         # front pure logic (node --test)
+pnpm test:web                         # front pure logic (node --test): PDF cap, formats, upload errors, agent steps
 pnpm lint
 pnpm exec tsc --noEmit
 cd agent
