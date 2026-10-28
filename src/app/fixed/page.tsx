@@ -6,6 +6,8 @@ import { SurfaceCanvas, CanvasEmptyState } from "@/components/SurfaceCanvas";
 import { FilteredUserMessage } from "@/components/FilteredUserMessage";
 import { FilteredAssistantMessage } from "@/components/FilteredAssistantMessage";
 import { Split } from "@/components/Split";
+import { SampleBar } from "@/components/SampleBar";
+import { SAMPLES } from "@/lib/samples";
 import { usePdfAttachments } from "@/lib/use-pdf-attachments";
 import {
   PdfStatusBar,
@@ -16,7 +18,7 @@ const AGENT_ID = "fixed_agent";
 
 export default function FixedPage() {
   useAgent({ agentId: AGENT_ID });
-  const { loaded, uploadError, attachments } = usePdfAttachments();
+  const { loaded, uploadError, setLoaded, attachments } = usePdfAttachments();
 
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)]">
@@ -31,6 +33,11 @@ export default function FixedPage() {
               loaded={loaded}
               error={uploadError}
               accent="mint"
+            />
+            <SampleBar
+              agentId={AGENT_ID}
+              samples={SAMPLES.fixed}
+              onLoaded={setLoaded}
             />
             <div className="flex-1 min-h-0">
               <CopilotChat

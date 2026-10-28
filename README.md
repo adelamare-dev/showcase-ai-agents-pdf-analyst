@@ -109,6 +109,8 @@ a2ui-pdf-analyst/
 
 ## Sample PDFs
 
+The one-click "Essayer un exemple" buttons use open-licensed PDFs bundled in `public/samples/`; titles, licences and attribution are in [`public/samples/SOURCES.md`](public/samples/SOURCES.md). The documents below are not bundled (no open licence): they are plain links.
+
 These work well for the dynamic-schema demo:
 
 - Apple Q4 FY24 Consolidated Financial Statements ([download](https://www.apple.com/newsroom/pdfs/fy2024-q4/FY24_Q4_Consolidated_Financial_Statements.pdf)) — structured tables, multiple categorical breakdowns

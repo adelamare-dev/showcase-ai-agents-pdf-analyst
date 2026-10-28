@@ -11,6 +11,8 @@ import { SurfaceCanvas, CanvasEmptyState } from "@/components/SurfaceCanvas";
 import { FilteredUserMessage } from "@/components/FilteredUserMessage";
 import { FilteredAssistantMessage } from "@/components/FilteredAssistantMessage";
 import { Split } from "@/components/Split";
+import { SampleBar } from "@/components/SampleBar";
+import { SAMPLES } from "@/lib/samples";
 import { usePdfAttachments } from "@/lib/use-pdf-attachments";
 import {
   PdfStatusBar,
@@ -21,7 +23,7 @@ const AGENT_ID = "dynamic_agent";
 
 export default function DynamicPage() {
   useAgent({ agentId: AGENT_ID });
-  const { loaded, uploadError, attachments } = usePdfAttachments();
+  const { loaded, uploadError, setLoaded, attachments } = usePdfAttachments();
 
   // generate_a2ui (the Python tool) is now the surface producer. Show a
   // small pill while it streams, hide on complete (the rendered surface
@@ -69,6 +71,11 @@ export default function DynamicPage() {
               loaded={loaded}
               error={uploadError}
               accent="lilac"
+            />
+            <SampleBar
+              agentId={AGENT_ID}
+              samples={SAMPLES.dynamic}
+              onLoaded={setLoaded}
             />
             <div className="flex-1 min-h-0">
               <CopilotChat

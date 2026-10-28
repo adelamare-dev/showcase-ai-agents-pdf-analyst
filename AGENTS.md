@@ -34,6 +34,7 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 
 - **Deux dossiers `src/`** : celui du front à la racine, celui de l'agent sous `agent/`. Sans `pyrightconfig.json` (`executionEnvironments: [{root: "agent"}]`), Pylance, ouvert à la racine, résout `from src import …` vers le `src/` du front et signale `"dynamic_agent" is unknown import symbol`. Ne pas supprimer ce fichier, et choisir `agent/.venv` comme interpréteur dans VS Code (Pylance ignore `venvPath`).
 - **Rechargement à chaud de l'agent peu fiable sous Windows.** Après une modification sous `agent/`, uvicorn (`--reload`, StatReload) a déjà affiché `Reloading...` sans jamais redémarrer. Avant un e2e live qui suit une modification de l'agent, relancer `sfw pnpm dev`, puis attendre `Application startup complete.`
+- **`public/samples/` : uniquement des PDF à licence ouverte, ≤ 30 000 caractères extraits.** Tout ajout se documente dans `public/samples/SOURCES.md` (licence, URL, attribution) ; les exemples cliquables de `/fixed` et `/dynamic` vivent dans `src/lib/samples.ts`.
 
 ## Conventions qui s'écartent de l'évidence
 
