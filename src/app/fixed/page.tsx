@@ -5,6 +5,7 @@ import { SiteNav } from "@/components/Brand";
 import { SurfaceCanvas, CanvasEmptyState } from "@/components/SurfaceCanvas";
 import { FilteredUserMessage } from "@/components/FilteredUserMessage";
 import { FilteredAssistantMessage } from "@/components/FilteredAssistantMessage";
+import { useToolStepRenderers } from "@/components/ToolStep";
 import { Split } from "@/components/Split";
 import { SampleBar } from "@/components/SampleBar";
 import { SAMPLES } from "@/lib/samples";
@@ -19,6 +20,7 @@ const AGENT_ID = "fixed_agent";
 export default function FixedPage() {
   useAgent({ agentId: AGENT_ID });
   const { loaded, uploadError, setLoaded, attachments } = usePdfAttachments();
+  useToolStepRenderers();
 
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)]">

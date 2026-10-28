@@ -1,15 +1,11 @@
 "use client";
 
-import { z } from "zod";
-import {
-  CopilotChat,
-  useAgent,
-  useRenderTool,
-} from "@copilotkit/react-core/v2";
+import { CopilotChat, useAgent } from "@copilotkit/react-core/v2";
 import { SiteNav } from "@/components/Brand";
 import { SurfaceCanvas, CanvasEmptyState } from "@/components/SurfaceCanvas";
 import { FilteredUserMessage } from "@/components/FilteredUserMessage";
 import { FilteredAssistantMessage } from "@/components/FilteredAssistantMessage";
+import { useToolStepRenderers } from "@/components/ToolStep";
 import { Split } from "@/components/Split";
 import { SampleBar } from "@/components/SampleBar";
 import { SAMPLES } from "@/lib/samples";
@@ -25,38 +21,7 @@ export default function DynamicPage() {
   useAgent({ agentId: AGENT_ID });
   const { loaded, uploadError, setLoaded, attachments } = usePdfAttachments();
 
-  // generate_a2ui (the Python tool) is now the surface producer. Show a
-  // small pill while it streams, hide on complete (the rendered surface
-  // appears in the canvas. chat doesn't need a record of it).
-  useRenderTool({
-    name: "generate_a2ui",
-    parameters: z.any(),
-    render: ({ status }) => {
-      if (status === "complete") return <></>;
-      return (
-        <div className="surface-soft px-3 py-2 my-1 flex items-center gap-3 text-[13px] text-[var(--ink-2)]">
-          <span className="relative inline-flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--lilac)] opacity-75 animate-ping" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--lilac)]" />
-          </span>
-          <span>Composing a surface…</span>
-        </div>
-      );
-    },
-  });
-
-  // query_pdf: render nothing, ever. The "Composing a surface…" pill
-  // from generate_a2ui is the only chat signal we want. We override the
-  // default tool card here (instead of leaving it) for two reasons:
-  // 1) the default tool card keeps args/result in the DOM and our args
-  //    are the full PDF body, which is noisy.
-  // 2) when the agent calls query_pdf more than once per turn, the
-  //    default would render multiple pills back to back.
-  useRenderTool({
-    name: "query_pdf",
-    parameters: z.any(),
-    render: () => <></>,
-  });
+  useToolStepRenderers();
 
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)]">
