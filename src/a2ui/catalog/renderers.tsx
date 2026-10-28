@@ -544,7 +544,7 @@ const BarChart = ({
             formatter={(v: unknown) => formatCompact(Number(v))}
             cursor={{ fill: "var(--lilac-softer)" }}
           />
-          <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="var(--lilac)">
+          <Bar dataKey="value" name="Valeur" radius={[6, 6, 0, 0]} fill="var(--lilac)">
             <LabelList
               dataKey="value"
               position="top"
@@ -603,6 +603,7 @@ const LineChart = ({
           <Line
             type="monotone"
             dataKey="value"
+            name="Valeur"
             stroke="#3b3a8a"
             strokeWidth={2.5}
             dot={{
@@ -667,7 +668,7 @@ const HorizontalBarChart = ({
             formatter={(v: unknown) => formatCompact(Number(v))}
             cursor={{ fill: "var(--lilac-softer)" }}
           />
-          <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="var(--lilac)">
+          <Bar dataKey="value" name="Valeur" radius={[0, 6, 6, 0]} fill="var(--lilac)">
             <LabelList
               dataKey="value"
               position="right"
