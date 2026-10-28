@@ -1,9 +1,13 @@
+import asyncio
 import json
 
 import pytest
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 from src import dynamic_agent
+from src.a2ui_validation import validate_components
 from src.catalog import CATALOG_ID
 from tests.fakes import ScriptedModel, fake_runtime
 
@@ -89,6 +93,13 @@ def _run_scripted(monkeypatch, responses, messages=None):
     return stub, json.loads(result)["a2ui_operations"]
 
 
+def test_render_prompt_shows_a_valid_flat_example(monkeypatch):
+    assert validate_components(dynamic_agent.RENDER_EXAMPLE) == []
+    stub, _ = _run_scripted(monkeypatch, [_render_call()])
+    system = stub.calls[0][0]
+    assert json.dumps(dynamic_agent.RENDER_EXAMPLE) in system.content
+
+
 def test_valid_first_try_calls_model_once(monkeypatch):
     stub, _ = _run_scripted(monkeypatch, [_render_call()])
     assert len(stub.calls) == 1
@@ -139,3 +150,44 @@ def test_model_supplied_catalog_id_is_ignored(monkeypatch):
     call.tool_calls[0]["args"]["catalogId"] = "https://example.invalid/other"
     _, ops = _run_scripted(monkeypatch, [call])
     assert ops[0]["createSurface"]["catalogId"] == CATALOG_ID
+
+
+class _RenderLoopingModel(BaseChatModel):
+    """Main agent that keeps asking for another surface, as small models do."""
+
+    calls: list = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "render-looping-fake"
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.calls.append(messages)
+        reply = AIMessage(
+            content="",
+            tool_calls=[
+                {"id": f"call{len(self.calls)}", "name": "generate_a2ui", "args": {}}
+            ],
+        )
+        return ChatResult(generations=[ChatGeneration(message=reply)])
+
+
+def test_turn_ends_after_the_first_surface(monkeypatch):
+    main_model = _RenderLoopingModel(calls=[])
+    monkeypatch.setattr(dynamic_agent, "chat_model", lambda model: main_model)
+    monkeypatch.setattr(
+        dynamic_agent, "_RENDER_MODEL", ScriptedModel([_render_call()] * 5)
+    )
+    graph = dynamic_agent.build_dynamic_agent()
+    result = asyncio.run(
+        graph.ainvoke(
+            {"messages": [HumanMessage(content="q")]},
+            config={"configurable": {"thread_id": "t1"}, "recursion_limit": 12},
+        )
+    )
+    surfaces = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+    assert len(main_model.calls) == 1
+    assert len(surfaces) == 1

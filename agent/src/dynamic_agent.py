@@ -40,6 +40,7 @@ without any model call.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from copilotkit import CopilotKitMiddleware, a2ui
@@ -80,8 +81,23 @@ def render_a2ui(
 
 _RENDER_MODEL = chat_model(RENDER_MODEL)
 
+# Shown verbatim to the render model. Small models otherwise guess the shape
+# (a `type` key, nested component objects) and every attempt is rejected.
+RENDER_EXAMPLE = [
+    {"id": "root", "component": "Stack", "children": ["title", "trend"]},
+    {"id": "title", "component": "Heading", "text": "Revenue by quarter"},
+    {
+        "id": "trend",
+        "component": "LineChart",
+        "data": [{"label": "Q1", "value": 41.2}, {"label": "Q2", "value": 43.0}],
+    },
+]
 
-@tool()
+
+# return_direct ends the turn as soon as the surface is produced. The prompt
+# also says to stop, but small models ignore it and keep re-rendering until
+# the recursion limit, so the stop cannot be left to the model.
+@tool(return_direct=True)
 def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
     """Render the answer to the user's question as an A2UI surface.
 
@@ -114,7 +130,12 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
         "Inline all data (use plain values, not {{path}} bindings, unless a "
         "property explicitly accepts a path). The user's request is in the "
         "most recent messages. Honor the words they used (chart type, "
-        "comparison, etc.)."
+        "comparison, etc.).\n\n"
+        "`components` is a FLAT list. Each item is one object with a string "
+        "`id`, a string `component` naming a catalog type, and that type's "
+        "props at the same level. Parents reference children by id, never by "
+        "nesting objects. Example:\n"
+        f"{json.dumps(RENDER_EXAMPLE)}"
     )
 
     model_with_tool = _RENDER_MODEL.bind_tools([render_a2ui], tool_choice="render_a2ui")
