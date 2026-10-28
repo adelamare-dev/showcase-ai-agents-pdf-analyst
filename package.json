@@ -15,6 +15,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test:web": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/lib/**/*.test.ts\"",
     "install:agent": "cd agent && uv sync",
     "postinstall": "pnpm run install:agent"
   },

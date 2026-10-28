@@ -55,6 +55,7 @@ Niveau par défaut : **standard**.
 - Agent Python : `cd agent && uv run pytest` (modèles factices, aucun appel réseau), puis
   `uv run --with "pyright[nodejs]" pyright src tests` (0 erreur attendue).
 
+- Front, logique pure (plafond du texte PDF) : `pnpm test:web` (`node --test`, sans dépendance), puis `pnpm lint` et `pnpm exec tsc --noEmit`.
 - Renderers et catalogue : `/catalog` affiche les 21 composants sans appeler l'agent.
 - Flux agent (`/fixed`, `/dynamic`) : démonstration réelle avec un PDF attaché. Il faut `MISTRAL_API_KEY` dans `agent/.env`, et chaque essai consomme des tokens.
   - Attendu sur `/dynamic` : **une seule** pastille « SURFACE » par tour, avec un graphique dans le canvas. Plusieurs pastilles signalent une boucle d'outil. Un simple titre suivi d'un résumé signale la surface de repli, c'est-à-dire un rendu rejeté deux fois.
