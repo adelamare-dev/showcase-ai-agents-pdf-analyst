@@ -56,3 +56,20 @@ def test_query_pdf_system_message_carries_the_french_rule(monkeypatch):
 def test_rule_requires_numbers_and_french_formats():
     assert "numbers" in FRENCH_OUTPUT_RULE
     assert "DD/MM/YYYY" in FRENCH_OUTPUT_RULE
+
+
+def test_dashboard_schema_has_no_english_static_label():
+    schema = (fixed_agent.SCHEMA_DIR / "dashboard.json").read_text(encoding="utf-8")
+    for english in (
+        "TREND",
+        "SHARE OF TOTAL",
+        "DETAIL",
+        "Scope",
+        "Monthly performance",
+        "Breakdown",
+        "Top rows",
+        '"Name"',
+        '"Category"',
+        '"Value"',
+    ):
+        assert english not in schema, english

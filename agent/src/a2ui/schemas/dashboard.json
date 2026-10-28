@@ -103,7 +103,7 @@
   {
     "id": "trend-section",
     "component": "Section",
-    "eyebrow": "TREND",
+    "eyebrow": "TENDANCE",
     "title": "Performance mensuelle",
     "child": "trend-card"
   },
@@ -121,7 +121,7 @@
   {
     "id": "share-section",
     "component": "Section",
-    "eyebrow": "SHARE OF TOTAL",
+    "eyebrow": "PART DU TOTAL",
     "title": "Répartition",
     "child": "share-card"
   },
@@ -140,7 +140,7 @@
   {
     "id": "table-section",
     "component": "Section",
-    "eyebrow": "DETAIL",
+    "eyebrow": "DÉTAIL",
     "title": "Principales lignes",
     "child": "table-card"
   },
