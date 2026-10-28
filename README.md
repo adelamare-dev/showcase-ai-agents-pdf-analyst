@@ -14,7 +14,7 @@ All three routes share the same brand tokens (`src/a2ui/theme.css`), the same Re
 
 ## Prerequisites
 
-- Node.js 20+ and [pnpm](https://pnpm.io/) (npm works too)
+- Node.js 20+ and [pnpm](https://pnpm.io/) (pnpm only)
 - Python 3.12
 - [uv](https://docs.astral.sh/uv/) for the Python agent
 - A Mistral API key (a free one from [console.mistral.ai](https://console.mistral.ai/) is enough)
@@ -29,7 +29,7 @@ pnpm install                         # installs Next.js + runs `uv sync` for the
 pnpm dev                             # boots web on :3000, agent on :8123
 ```
 
-Open <http://localhost:3000>. `npm install && npm run dev` works identically.
+Open <http://localhost:3000>. On `/fixed` and `/dynamic`, the "Essayer un exemple" buttons load a bundled sample PDF in one click. Optionally, run installs through [Socket Firewall](https://socket.dev/): `sfw pnpm i`.
 
 **Windows:** keep the clone path short (around 100 characters or less). pnpm's
 store paths under `node_modules/.pnpm` add up to ~135 characters, and Turbopack
@@ -42,8 +42,8 @@ Originally published in [CopilotKit/CopilotKit](https://github.com/CopilotKit/Co
 
 `agent/.env`:
 
-| Variable         | Required | Notes                                                                                 |
-| ---------------- | -------- | ------------------------------------------------------------------------------------- |
+| Variable          | Required | Notes                                                                                 |
+| ----------------- | -------- | ------------------------------------------------------------------------------------- |
 | `MISTRAL_API_KEY` | yes      | used by the main agent and by the secondary LLMs inside `query_pdf` / `generate_a2ui` |
 
 ## Architecture
@@ -54,7 +54,7 @@ a2ui-pdf-analyst/
 ├── next.config.ts
 ├── postcss.config.mjs
 ├── tsconfig.json
-├── public/                   → static assets (CopilotKit brand SVGs)
+├── public/                   → static assets (brand SVGs) + samples/ (open-licensed demo PDFs)
 ├── src/                      → Next.js 16 · React 19 · Tailwind v4
 │   ├── app/
 │   │   ├── api/copilotkit/   → CopilotKit V2 runtime endpoint (HttpAgent → Python)
@@ -75,27 +75,38 @@ a2ui-pdf-analyst/
 │   ├── components/
 │   │   ├── SurfaceCanvas.tsx        → mounts A2UIProvider + renders surfaces
 │   │   ├── FilteredUserMessage.tsx  → strips inlined PDF text from chat
+│   │   ├── PdfChatChrome.tsx        → truncation status bar + confidentiality note
+│   │   ├── SampleBar.tsx            → "Essayer un exemple" + suggested questions
 │   │   ├── FilteredAssistantMessage.tsx → suppresses JSON-shaped agent replies
 │   │   ├── Split.tsx                → VS-Code-style resizable chat/canvas split
 │   │   ├── Providers.tsx            → <CopilotKit> + activity renderers
 │   │   └── Brand.tsx                → SiteNav + PageHeader
-│   └── lib/pdf.ts            → client-side PDF text extraction (pdfjs-dist)
+│   └── lib/
+│       ├── pdf.ts                  → client-side PDF text extraction (pdfjs-dist) + text cap
+│       ├── use-pdf-attachments.ts  → attachment handling, truncation note
+│       └── samples.ts              → sample catalogue and French suggested questions
 └── agent/                    → Python · LangChain · LangGraph · FastAPI · AG-UI
     ├── main.py               → /fixed and /dynamic FastAPI endpoints
     ├── pyproject.toml
     ├── uv.lock
+    ├── scripts/measure.py    → latency and token measurement
     └── src/
+        ├── models.py         → model IDs, temperature, retry and timeout (single home)
         ├── catalog.py        → CATALOG_ID + system-prompt fragment listing components
         ├── fixed_agent.py    → render_dashboard backend tool
         ├── dynamic_agent.py  → query_pdf + generate_a2ui tools
-        ├── pdf_tools.py      → query_pdf: PDF text → structured JSON answer
+        ├── pdf_tools.py      → query_pdf: question → structured JSON answer, document read from state
         ├── multimodal_middleware.py → ag-ui-langgraph patch so PDF text survives the trip to the model API
         └── a2ui/schemas/dashboard.json → the fixed dashboard layout (Stack / Grid / charts / table)
 ```
 
 ## How it works
 
-**PDF attachment** — CopilotKit's multimodal attachment support lets the user attach a PDF directly in the chat input. The frontend extracts the full text client-side via `pdfjs-dist` and inlines it into the user message under a `[Document: <filename>]` header. `multimodal_middleware.py` patches `ag-ui-langgraph` so this text block survives serialization and arrives intact at the model. The `query_pdf` tool itself reads the most recent `[Document: ...]` block from the graph state (the agent only checks that a document exists before calling it) — attach once, ask many questions.
+**PDF attachment** — CopilotKit's multimodal attachment support lets the user attach a PDF directly in the chat input. The frontend extracts the text client-side via `pdfjs-dist` and inlines it into the user message under a `[Document: <filename>]` header. `multimodal_middleware.py` patches `ag-ui-langgraph` so this text block survives serialization and arrives intact at the model. The `query_pdf` tool itself reads the most recent `[Document: ...]` block from the graph state (the agent only checks that a document exists before calling it) — attach once, ask many questions.
+
+**Text cap** — extraction is capped in the browser at `PDF_TEXT_MAX_CHARS` (60 000 characters, `src/lib/pdf.ts`), cut at a page boundary. When a document is truncated, the status bar shows "Document tronqué : pages 1 à N sur M" and the agent receives the same note. There is no second, server-side truncation: this is the single cap. A PDF with no extractable text (a scan) is refused with an error message. A confidentiality line under the composer reminds users that this is a free-tier demo.
+
+**Samples** — on `/fixed` and `/dynamic`, "Essayer un exemple" loads a bundled PDF and shows clickable French suggested questions that send the question together with the document. Suggestions appear only before the first message and only while the sample is the loaded document.
 
 **Fixed schema (`/fixed`)** — `agent/src/a2ui/schemas/dashboard.json` is a static A2UI component tree the agent never touches. The `render_dashboard` tool takes typed arguments (KPIs, trend, share, rows, scope chips), packages them as A2UI `update_data_model` ops, and the existing tree picks them up via `{path}` bindings. One LLM pass, one tool call, surface streams in.
 
@@ -103,7 +114,7 @@ a2ui-pdf-analyst/
 
 1. User attaches a PDF and asks a question. Frontend inlines the PDF text into the message.
 2. Agent calls `query_pdf(question)` → the tool reads the latest attached document from the graph state, and a sub-LLM returns structured JSON: `shape_hint`, `title`, `summary`, `data`.
-3. Agent calls `generate_a2ui` (no arguments) → spawns a second sub-LLM bound to a no-op `render_a2ui` shim with `tool_choice` forced to that shim.
+3. Agent calls `generate_a2ui` (no arguments; it re-reads the message history) → spawns a second sub-LLM bound to a no-op `render_a2ui` shim with `tool_choice` forced to that shim.
 4. The second LLM's tool-call arguments (surfaceId, catalogId, components, data) become A2UI `create_surface` + `update_components` + `update_data_model` operations.
 5. The JS-side A2UI middleware detects `a2ui_operations` in the tool result and emits the snapshot events the canvas listens for. Surface renders. Agent emits an empty chat message.
 
@@ -136,6 +147,22 @@ On `/fixed` after attaching a PDF:
 | ------------------------------------------- | ---------------------------------------------------------------------- |
 | `Render the dashboard.`                     | full dashboard with KPIs, trend chart, share donut, table, scope chips |
 | `Switch scope to FY24.` (or click the chip) | re-renders the same dashboard with FY24 data                           |
+
+## Development
+
+Model IDs, temperature (0), one retry and a 30 s timeout per call live in `agent/src/models.py`; the timeout was set from a measurement.
+
+```bash
+pnpm test:web                         # front pure logic (node --test)
+pnpm lint
+pnpm exec tsc --noEmit
+cd agent
+uv run pytest                         # fake models, no network
+uv run --with "pyright[nodejs]" pyright src tests scripts
+uv run python scripts/measure.py --dry-run   # no network
+```
+
+Without `--dry-run`, `scripts/measure.py` makes real Mistral calls (at most 12 turns per run) and reports latency and tokens per call. Options: `--agent-model`, `--extractor-model`, `--render-model`, `--repeat`, `--extra ROUTE PDF_PATH QUESTION`, `--cap`.
 
 ## Tech stack
 
