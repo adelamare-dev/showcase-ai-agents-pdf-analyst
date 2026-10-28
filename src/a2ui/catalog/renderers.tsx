@@ -20,6 +20,7 @@ import {
   YAxis,
 } from "recharts";
 import type { RendererProps } from "@copilotkit/a2ui-renderer";
+import { autoDelta, formatCompact, formatNumber } from "@/lib/format";
 
 /* The runtime walks `{path}` bindings against the data model before
  * handing props to renderers, so every prop value below is post-resolution. */
@@ -47,13 +48,6 @@ const ALIGN = {
 /* CopilotKit brand-accent palette in fixed legend order. */
 const CHART_PALETTE = ["#7c70f5", "#3aa37f", "#e89232", "#d5b62c", "#d54b53"];
 
-const fmtNumber = (n: number) =>
-  Math.abs(n) >= 1_000_000
-    ? `${(n / 1_000_000).toFixed(1)}M`
-    : Math.abs(n) >= 1_000
-      ? `${(n / 1_000).toFixed(1)}k`
-      : n.toLocaleString();
-
 /* A delta value is "meaningful" if it has a digit. Bare "+" / "-" or empty
  * strings shouldn't render a badge; that just produces an empty pill. */
 const hasMeaningfulDelta = (v?: string) =>
@@ -79,50 +73,6 @@ const condenseDelta = (raw: string): string => {
     if (m) return m[0].replace(/\s+/g, "");
   }
   return trimmed;
-};
-
-/* Pull the first number from a free-form string. Handles $X, X.XM, etc.
- * Returns the number's magnitude (sign + numeric value), preserving the
- * order-of-magnitude suffix (k/M/B) when present. */
-const parseMoneyish = (s: string): number | null => {
-  if (typeof s !== "string") return null;
-  const m = s.replace(/[,_]/g, "").match(/(-?\d+(?:\.\d+)?)\s*([kKmMbB]?)/);
-  if (!m) return null;
-  const n = parseFloat(m[1]);
-  if (!isFinite(n)) return null;
-  const suffix = (m[2] || "").toLowerCase();
-  const mult =
-    suffix === "k"
-      ? 1_000
-      : suffix === "m"
-        ? 1_000_000
-        : suffix === "b"
-          ? 1_000_000_000
-          : 1;
-  return n * mult;
-};
-
-/* When the agent leaves `delta` empty but caption carries a prior-period
- * value like "vs. $89,498M in Q4 FY23", compute the percentage from
- * value vs. that prior number so the user still sees the badge they
- * asked for. Returns a string like "+6.1%" / "-3.0%" or null when we
- * can't extract two comparable numbers. Loose by design: this is a
- * fallback for noisy prompts; the agent should provide its own delta. */
-const autoDelta = (value?: string, caption?: string): string | null => {
-  if (!value || !caption) return null;
-  // Caption needs to look like a comparison. Anchor on "vs.", "from",
-  // "compared", "prior", or a leading "$" right after the verb.
-  if (!/vs\.|from|compared|prior|previous|last|relative to/i.test(caption)) {
-    return null;
-  }
-  const current = parseMoneyish(value);
-  const prior = parseMoneyish(caption);
-  if (current == null || prior == null || prior === 0) return null;
-  const pct = ((current - prior) / Math.abs(prior)) * 100;
-  if (!isFinite(pct)) return null;
-  const sign = pct >= 0 ? "+" : "";
-  // 1 decimal for sub-10% movements, integer otherwise: easier to scan.
-  return `${sign}${Math.abs(pct) < 10 ? pct.toFixed(1) : pct.toFixed(0)}%`;
 };
 
 const Stack = ({
@@ -580,7 +530,7 @@ const BarChart = ({
             axisLine={false}
             tickLine={false}
             width={44}
-            tickFormatter={fmtNumber}
+            tickFormatter={formatCompact}
           />
           <Tooltip
             contentStyle={tooltipStyle}
@@ -593,7 +543,7 @@ const BarChart = ({
               dataKey="value"
               position="top"
               style={{ fontSize: 11, fontWeight: 600, fill: "var(--ink)" }}
-              formatter={(v: unknown) => fmtNumber(Number(v))}
+              formatter={(v: unknown) => formatCompact(Number(v))}
             />
           </Bar>
         </RBarChart>
@@ -636,7 +586,7 @@ const LineChart = ({
             axisLine={false}
             tickLine={false}
             width={44}
-            tickFormatter={fmtNumber}
+            tickFormatter={formatCompact}
           />
           <Tooltip
             contentStyle={tooltipStyle}
@@ -660,7 +610,7 @@ const LineChart = ({
               dataKey="value"
               position="top"
               style={{ fontSize: 11, fontWeight: 600, fill: "var(--ink)" }}
-              formatter={(v: unknown) => fmtNumber(Number(v))}
+              formatter={(v: unknown) => formatCompact(Number(v))}
             />
           </Line>
         </RLineChart>
@@ -693,7 +643,7 @@ const HorizontalBarChart = ({
             tick={axisTickStyle}
             axisLine={false}
             tickLine={false}
-            tickFormatter={fmtNumber}
+            tickFormatter={formatCompact}
           />
           <YAxis
             type="category"
@@ -714,7 +664,7 @@ const HorizontalBarChart = ({
               dataKey="value"
               position="right"
               style={{ fontSize: 11, fontWeight: 600, fill: "var(--ink)" }}
-              formatter={(v: unknown) => fmtNumber(Number(v))}
+              formatter={(v: unknown) => formatCompact(Number(v))}
             />
           </Bar>
         </RBarChart>
@@ -746,7 +696,7 @@ const ScatterChart = ({
             tick={axisTickStyle}
             axisLine={false}
             tickLine={false}
-            tickFormatter={fmtNumber}
+            tickFormatter={formatCompact}
             label={
               props.xLabel
                 ? {
@@ -766,7 +716,7 @@ const ScatterChart = ({
             axisLine={false}
             tickLine={false}
             width={44}
-            tickFormatter={fmtNumber}
+            tickFormatter={formatCompact}
             label={
               props.yLabel
                 ? {
@@ -784,7 +734,7 @@ const ScatterChart = ({
             labelStyle={tooltipLabelStyle}
             cursor={{ strokeDasharray: "3 3" }}
             formatter={(v: unknown, name: unknown) => [
-              fmtNumber(Number(v)),
+              formatCompact(Number(v)),
               name == null ? "" : String(name),
             ]}
           />
@@ -817,7 +767,7 @@ const DonutChart = ({
               itemStyle={tooltipItemStyle}
               labelStyle={tooltipLabelStyle}
               formatter={(value: unknown, name: unknown) => [
-                fmtNumber(Number(value)),
+                formatCompact(Number(value)),
                 String(name),
               ]}
             />
@@ -845,7 +795,7 @@ const DonutChart = ({
             Total
           </span>
           <span className="text-[20px] font-semibold tracking-tight text-[var(--ink)] tabular-nums leading-tight">
-            {fmtNumber(total)}
+            {formatCompact(total)}
           </span>
         </div>
       </div>
@@ -867,7 +817,7 @@ const DonutChart = ({
                 {d.label}
               </span>
               <span className="mono tabular-nums text-[12.5px] text-[var(--ink)] font-medium shrink-0">
-                {fmtNumber(d.value)}
+                {formatCompact(d.value)}
               </span>
               <span className="mono text-[11px] text-[var(--ink)] shrink-0 w-9 text-right">
                 {pct}%
@@ -917,7 +867,12 @@ const DataTable = ({
             >
               {columns.map((c) => {
                 const raw = row[c.key];
-                const text = raw == null ? "" : String(raw);
+                const text =
+                  raw == null
+                    ? ""
+                    : typeof raw === "number"
+                      ? formatNumber(raw)
+                      : String(raw);
                 const looksLikeDelta = c.key === "delta" || c.key === "Δ";
                 const meaningful = !looksLikeDelta || hasMeaningfulDelta(text);
                 if (looksLikeDelta && meaningful) {
