@@ -15,6 +15,10 @@ unreliable in a live run, escalate only that role one step: `ministral-8b-2512`
 `mistral-large-2512` are not usable on this account (0 requests/min, respectively
 not in the plan).
 
+The render role has been escalated once: on 3B, follow-up questions came back
+as nested component trees that failed validation twice in a row, so the user
+only got the text fallback. 8B returns the flat component list.
+
 Retries and timeout are deliberately tight (one retry, 45 s): a rendering call
 that is going to fail should fail fast so the user is told, instead of
 watching a spinner for minutes behind several silent retries.
@@ -26,7 +30,7 @@ from langchain_mistralai import ChatMistralAI
 
 AGENT_MODEL = "ministral-3b-2512"
 EXTRACTOR_MODEL = "ministral-3b-2512"
-RENDER_MODEL = "ministral-3b-2512"
+RENDER_MODEL = "ministral-8b-2512"
 
 REQUEST_TIMEOUT_S = 45
 MAX_RETRIES = 1

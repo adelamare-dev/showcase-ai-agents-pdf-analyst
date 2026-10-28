@@ -142,4 +142,4 @@ On `/fixed` after attaching a PDF:
 | Frontend       | Next.js 16 · React 19 · Tailwind v4 · TypeScript · `@copilotkit/react-core/v2` · `@copilotkit/a2ui-renderer` · `pdfjs-dist` · Recharts |
 | Runtime bridge | `@copilotkit/runtime/v2` · `@ag-ui/client` (HttpAgent)                                                                                 |
 | Backend        | Python 3.12 · FastAPI · `ag-ui-langgraph` · `copilotkit` (Python SDK) · `langchain` agents + LangGraph · `langchain-mistralai`        |
-| Model          | Ministral 3 3B (`ministral-3b-2512`) for the main agents, `query_pdf` and `generate_a2ui`; each role escalatable to 8B/14B            |
+| Model          | Ministral 3 3B (`ministral-3b-2512`) for the main agents and `query_pdf`; Ministral 3 8B (`ministral-8b-2512`) for `generate_a2ui`     |
