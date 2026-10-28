@@ -37,6 +37,7 @@ export default function FixedPage() {
             <SampleBar
               agentId={AGENT_ID}
               samples={SAMPLES.fixed}
+              current={loaded}
               onLoaded={setLoaded}
             />
             <div className="flex-1 min-h-0">

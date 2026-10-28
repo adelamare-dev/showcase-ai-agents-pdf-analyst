@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ComponentProps } from "react";
+import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import type { CopilotChat } from "@copilotkit/react-core/v2";
 import { preparePdf, type LoadedPdf } from "@/lib/pdf";
 
@@ -17,8 +17,13 @@ export function usePdfAttachments(): {
   setLoaded: (pdf: LoadedPdf) => void;
   attachments: Attachments;
 } {
-  const [loaded, setLoaded] = useState<LoadedPdf | null>(null);
+  const [loaded, setLoadedState] = useState<LoadedPdf | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const setLoaded = useCallback((pdf: LoadedPdf) => {
+    setUploadError(null);
+    setLoadedState(pdf);
+  }, []);
 
   const attachments = useMemo<Attachments>(
     () => ({
@@ -28,7 +33,7 @@ export function usePdfAttachments(): {
       onUpload: async (file) => {
         setUploadError(null);
         const { value, loaded: pdf } = await preparePdf(file);
-        setLoaded(pdf);
+        setLoadedState(pdf);
         return {
           type: "data",
           value,

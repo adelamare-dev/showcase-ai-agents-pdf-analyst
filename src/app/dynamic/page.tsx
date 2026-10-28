@@ -75,6 +75,7 @@ export default function DynamicPage() {
             <SampleBar
               agentId={AGENT_ID}
               samples={SAMPLES.dynamic}
+              current={loaded}
               onLoaded={setLoaded}
             />
             <div className="flex-1 min-h-0">

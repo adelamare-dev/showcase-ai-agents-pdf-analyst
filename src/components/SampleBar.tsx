@@ -16,10 +16,13 @@ const BUTTON =
 export function SampleBar({
   agentId,
   samples,
+  current,
   onLoaded,
 }: {
   agentId: string;
   samples: Sample[];
+  /** The document the page currently shows; a different one (composer upload) hides the suggestions. */
+  current: LoadedPdf | null;
   onLoaded: (pdf: LoadedPdf) => void;
 }) {
   const { agent } = useAgent({ agentId });
@@ -28,7 +31,7 @@ export function SampleBar({
   const [error, setError] = useState<string | null>(null);
 
   const busy = agent.isRunning;
-  const showSuggestions = doc !== null && agent.messages.length === 0;
+  const showSuggestions = doc !== null && doc.loaded === current;
 
   async function load(sample: Sample) {
     setError(null);
@@ -72,6 +75,8 @@ export function SampleBar({
     }
   }
 
+  if (agent.messages.length > 0) return null;
+
   return (
     <div className="shrink-0 px-4 py-2 border-b border-[var(--line)] flex flex-col gap-1.5">
       <span className="text-[11.5px] text-[var(--ink-2)]">
@@ -108,6 +113,9 @@ export function SampleBar({
               {q}
             </button>
           ))}
+          <span className="text-[11.5px] text-[var(--ink-2)]">
+            Cliquez une question pour l&rsquo;envoyer avec le document.
+          </span>
         </div>
       )}
     </div>

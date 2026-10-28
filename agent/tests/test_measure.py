@@ -120,5 +120,6 @@ def test_turns_on_one_event_loop_reuse_the_same_model_client():
         turns = asyncio.run(three_turns())
     finally:
         server.shutdown()
+        server.server_close()
 
     assert [turn.error for turn in turns] == [None, None, None]
