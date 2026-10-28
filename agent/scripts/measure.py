@@ -123,12 +123,21 @@ def build_message(question: str, filename: str, text: str) -> HumanMessage:
 # --- Callback instrumentation --------------------------------------------------
 
 
+ERROR_TEXT_CHARS = 200
+
+
 def describe_error(exc: BaseException) -> str:
-    """Error class and HTTP status only: the message can carry URLs."""
-    response = getattr(exc, "response", None)
-    status = getattr(response, "status_code", None)
+    """Name an error without leaking anything from a request.
+
+    An HTTP error is reported as class and status only. Any other exception
+    adds its message, cut short and on one line, so a failure is diagnosable.
+    """
     name = type(exc).__name__
-    return f"{name} {status}" if status else name
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status:
+        return f"{name} {status}"
+    text = " ".join(str(exc).split())[:ERROR_TEXT_CHARS]
+    return f"{name}: {text}" if text else name
 
 
 @dataclass
@@ -273,10 +282,10 @@ def build_graphs(models: dict[str, str]) -> dict[str, Any]:
     }
 
 
-async def run_turn(graph: Any, message: HumanMessage, timer: CallTimer) -> None:
+async def run_turn(graph: Any, message: HumanMessage, timer: CallTimer) -> Any:
     # Outside AG-UI nobody fills the `copilotkit` state key that the CopilotKit
     # middleware reads, so it is supplied empty.
-    await graph.ainvoke(
+    return await graph.ainvoke(
         {"messages": [message], "copilotkit": {"actions": [], "context": []}},
         config={
             "callbacks": [timer],
@@ -286,19 +295,50 @@ async def run_turn(graph: Any, message: HumanMessage, timer: CallTimer) -> None:
     )
 
 
-def play(graph: Any, route: str, label: str, message: HumanMessage) -> Turn:
+def tool_error(result: Any) -> str | None:
+    """The text of a provider failure that a tool turned into a tool message."""
+    from src.errors import TOOL_ERROR_PREFIX
+
+    for message in (result or {}).get("messages", []):
+        content = getattr(message, "content", None)
+        if isinstance(content, str) and content.startswith(TOOL_ERROR_PREFIX):
+            return content[:ERROR_TEXT_CHARS]
+    return None
+
+
+async def play(graph: Any, route: str, label: str, message: HumanMessage) -> Turn:
+    """Play one turn. All turns of a run must share one event loop: the model
+    clients keep connections bound to the loop that first used them."""
     timer = CallTimer()
     start = time.perf_counter()
     error = None
+    result = None
     try:
-        asyncio.run(run_turn(graph, message, timer))
+        result = await run_turn(graph, message, timer)
     except Exception as exc:
         error = describe_error(exc)
     wall = time.perf_counter() - start
     # The agent middleware turns provider failures into a chat reply, so they
-    # do not raise: they are read from the failed LLM calls instead.
-    error = error or next(iter(timer.errors()), None)
+    # do not raise: they are read from the failed LLM calls, or from the tool
+    # message that carries them, instead.
+    error = error or next(iter(timer.errors()), None) or tool_error(result)
     return Turn(route, label, wall, timer, error)
+
+
+async def play_all(
+    graphs: dict[str, Any], plan: list[tuple[str, Path, str, str]]
+) -> list[Turn]:
+    """Play the turns in order on one event loop; stop at the first failure."""
+    turns: list[Turn] = []
+    for index, (route, path, question, text) in enumerate(plan, start=1):
+        print(f"[{index}/{len(plan)}] {route} {path.name}", file=sys.stderr)
+        label = f"{path.stem}: {question[:40]}".replace("|", "/")
+        message = build_message(question, path.name, text)
+        turn = await play(graphs[route], route, label, message)
+        turns.append(turn)
+        if turn.error:
+            break
+    return turns
 
 
 # --- Report ----------------------------------------------------------------------
@@ -428,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     sys.path.insert(0, str(AGENT_DIR))
-    cap = args.cap or read_text_cap()
+    cap = read_text_cap() if args.cap is None else args.cap
     models = effective_models(args)
 
     prepared = []
@@ -453,21 +493,10 @@ def main(argv: list[str] | None = None) -> int:
     from src.models import REQUEST_TIMEOUT_S
 
     graphs = build_graphs(models)
-    turns: list[Turn] = []
-    failed = False
-    for index in range(planned):
-        route, path, question, text = prepared[index % len(prepared)]
-        label = path.stem
-        print(f"[{index + 1}/{planned}] {route} {path.name}", file=sys.stderr)
-        turn = play(
-            graphs[route], route, label, build_message(question, path.name, text)
-        )
-        turns.append(turn)
-        if turn.error:
-            failed = True
-            break
+    plan = [prepared[index % len(prepared)] for index in range(planned)]
+    turns = asyncio.run(play_all(graphs, plan))
     print(render_report(turns, models, cap, REQUEST_TIMEOUT_S))
-    return 1 if failed else 0
+    return 1 if turns[-1].error else 0
 
 
 if __name__ == "__main__":
