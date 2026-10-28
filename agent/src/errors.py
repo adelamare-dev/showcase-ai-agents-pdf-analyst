@@ -19,13 +19,18 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
-from langchain.agents.middleware import AgentMiddleware, hook_config
+from langchain.agents.middleware import AgentMiddleware, AgentState, hook_config
 from langchain_core.messages import AIMessage, ToolMessage
 
 TOOL_ERROR_PREFIX = "MISTRAL_ERROR: "
+
+# The middleware reads only `messages`, so it adopts whatever state schema the
+# other middleware of the agent declare. Bound to a fixed state instead, it
+# would clash with CopilotKitMiddleware's own schema in the type checker.
+StateT = TypeVar("StateT", bound=AgentState)
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +64,7 @@ def french_error_message(exc: BaseException) -> str | None:
     return None
 
 
-class MistralErrorMiddleware(AgentMiddleware):
+class MistralErrorMiddleware(AgentMiddleware[StateT]):
     """Answer provider failures in the chat and end the run.
 
     Model errors become a plain assistant reply. Errors raised by the models

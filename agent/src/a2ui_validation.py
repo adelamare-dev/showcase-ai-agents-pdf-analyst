@@ -91,7 +91,8 @@ def _last_query_pdf_summary(messages: list) -> tuple[str, str] | None:
         if not (isinstance(message, ToolMessage) and message.name == "query_pdf"):
             continue
         try:
-            payload = json.loads(message.content)
+            # `.text` covers both a plain string and a list of content blocks.
+            payload = json.loads(message.text)
         except (TypeError, ValueError):
             continue
         if isinstance(payload, dict):

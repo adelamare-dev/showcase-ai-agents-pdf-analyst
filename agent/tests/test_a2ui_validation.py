@@ -63,3 +63,14 @@ def test_fallback_uses_only_catalog_components():
         content='{"title": "T", "summary": "S"}',
     )
     assert validate_components(fallback_components([query])) == []
+
+
+def test_fallback_reads_query_pdf_result_given_as_content_blocks():
+    query = ToolMessage(
+        name="query_pdf",
+        tool_call_id="q1",
+        content=[{"type": "text", "text": '{"title": "CA 2024", "summary": "S"}'}],
+    )
+    components = fallback_components([query])
+    texts = {c["component"]: c["text"] for c in components if "text" in c}
+    assert texts["Heading"] == "CA 2024"

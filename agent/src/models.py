@@ -39,7 +39,7 @@ MAX_RETRIES = 1
 def chat_model(model: str) -> ChatMistralAI:
     """Build a deterministic Mistral chat client with the shared limits."""
     return ChatMistralAI(
-        model=model,
+        model_name=model,
         temperature=0,
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,
