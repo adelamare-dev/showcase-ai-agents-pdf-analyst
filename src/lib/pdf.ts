@@ -64,6 +64,15 @@ export function truncationNote(keptPages: number, totalPages: number): string {
   return `Document tronqué : pages 1 à ${keptPages} sur ${totalPages}`;
 }
 
+/** A PDF that parsed but holds nothing the agent could read. Its message is
+ *  meant for the user, unlike the errors thrown by the PDF parser. */
+export class NoTextError extends Error {
+  constructor() {
+    super("Aucun texte extractible dans ce PDF (document scanné ?).");
+    this.name = "NoTextError";
+  }
+}
+
 /** Single extraction path: extracts, caps, and prefixes the value with the
  *  truncation note when pages were dropped so the agent knows it is partial. */
 export async function preparePdf(
@@ -75,7 +84,7 @@ export async function preparePdf(
     PDF_TEXT_MAX_CHARS,
   );
   if (text.trim() === "") {
-    throw new Error("Aucun texte extractible dans ce PDF (document scanné ?).");
+    throw new NoTextError();
   }
   const value = truncated
     ? `[${truncationNote(keptPages, pages)}]\n${text}`

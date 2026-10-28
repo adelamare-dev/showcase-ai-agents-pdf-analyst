@@ -2,7 +2,10 @@
 
 import { useCallback, useMemo, useState, type ComponentProps } from "react";
 import type { CopilotChat } from "@copilotkit/react-core/v2";
-import { preparePdf, type LoadedPdf } from "@/lib/pdf";
+import { NoTextError, preparePdf, type LoadedPdf } from "@/lib/pdf";
+import { uploadErrorMessage } from "@/lib/upload-errors";
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 type Attachments = NonNullable<
   ComponentProps<typeof CopilotChat>["attachments"]
@@ -29,10 +32,25 @@ export function usePdfAttachments(): {
     () => ({
       enabled: true,
       accept: "application/pdf",
-      maxSize: 20 * 1024 * 1024,
+      maxSize: MAX_UPLOAD_BYTES,
       onUpload: async (file) => {
         setUploadError(null);
-        const { value, loaded: pdf } = await preparePdf(file);
+        let prepared: Awaited<ReturnType<typeof preparePdf>>;
+        try {
+          prepared = await preparePdf(file);
+        } catch (err) {
+          // Parser errors are English and technical: keep them in the console
+          // and let CopilotKit report a generic French failure.
+          if (err instanceof NoTextError) throw err;
+          console.error("PDF extraction failed", err);
+          throw new Error(
+            uploadErrorMessage(
+              { reason: "upload-failed", file, message: "" },
+              MAX_UPLOAD_BYTES,
+            ),
+          );
+        }
+        const { value, loaded: pdf } = prepared;
         setLoadedState(pdf);
         return {
           type: "data",
@@ -45,7 +63,12 @@ export function usePdfAttachments(): {
           },
         };
       },
-      onUploadFailed: (err) => setUploadError(err.message),
+      onUploadFailed: (failure) =>
+        setUploadError(
+          failure.reason === "upload-failed"
+            ? failure.message
+            : uploadErrorMessage(failure, MAX_UPLOAD_BYTES),
+        ),
     }),
     [],
   );

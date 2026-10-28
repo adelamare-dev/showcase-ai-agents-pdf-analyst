@@ -29,10 +29,10 @@ export function PdfStatusBar({
           <span className="mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--ink)]">
             chargé
           </span>
-          <span className="text-[12.5px] font-medium text-[var(--ink)] truncate">
+          <span className="text-[12.5px] font-medium text-[var(--ink)] truncate min-w-0">
             {loaded.filename}
           </span>
-          <span className="text-[11px] text-[var(--ink)] ml-auto">
+          <span className="text-[11px] text-[var(--ink)] ml-auto shrink-0 whitespace-nowrap">
             {loaded.keptPages} / {loaded.pages} p. ·{" "}
             {Math.round(loaded.chars / 1000)}k car.
           </span>

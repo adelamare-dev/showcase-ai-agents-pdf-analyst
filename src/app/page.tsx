@@ -9,48 +9,48 @@ export default function Home() {
         eyebrow="CopilotKit × A2UI v0.9"
         meta={
           <span className="pill">
-            <span className="dot" /> reference build
+            <span className="dot" /> version de référence
           </span>
         }
         title={
           <>
-            Agents that compose UI from your <br className="hidden md:inline" />
+            Des agents qui composent l’interface à partir de <br className="hidden md:inline" />
             <span
               className="bg-clip-text text-transparent"
               style={{ backgroundImage: "var(--brand-gradient)" }}
             >
-              own design system.
+              votre propre design system.
             </span>
           </>
         }
-        subtitle="Drop a PDF. Watch one agent paint a fixed dashboard from a hand-authored layout, and another agent invent the UI for any follow-up question. Both using the same 21-component catalog."
+        subtitle="Déposez un PDF. Un agent remplit un tableau de bord fixe à partir d’une mise en page écrite à la main, un autre invente l’interface pour chaque question de suivi. Tous deux utilisent le même catalogue de 21 composants."
       />
 
       <main className="flex-1 max-w-[1320px] mx-auto px-6 py-12 w-full">
         <div className="grid md:grid-cols-2 gap-5">
           <ModeCard
             href="/fixed"
-            badge="01 · FIXED SCHEMA"
-            title="Same layout, your data"
-            blurb="You author the dashboard once. The agent only fills in the numbers. Fast, predictable, brand-locked."
+            badge="01 · SCHÉMA FIXE"
+            title="Même mise en page, vos données"
+            blurb="Vous écrivez le tableau de bord une fois. L’agent ne fait que renseigner les chiffres. Rapide, prévisible, fidèle à votre marque."
             bullets={[
-              "One JSON file is the dashboard layout",
-              "Agent extracts KPIs, trend, share, table rows from the PDF",
-              "Surface streams in instantly. No second LLM call to render",
+              "Un fichier JSON décrit la mise en page du tableau de bord",
+              "L’agent extrait du PDF les indicateurs, la tendance, la répartition et les lignes du tableau",
+              "La surface s’affiche aussitôt, sans second appel au modèle pour le rendu",
             ]}
-            cta="Open the fixed demo"
+            cta="Ouvrir la démo à schéma fixe"
           />
           <ModeCard
             href="/dynamic"
-            badge="02 · DYNAMIC SCHEMA"
-            title="Agent picks the shape"
-            blurb="No pre-written layout. The agent answers your question, then a second LLM pass invents the UI from the catalog."
+            badge="02 · SCHÉMA DYNAMIQUE"
+            title="L’agent choisit la forme"
+            blurb="Aucune mise en page écrite d’avance. L’agent répond à votre question, puis un second passage du modèle invente l’interface à partir du catalogue."
             bullets={[
-              "Pick any of the 21 catalog components, in any combination",
-              "Stat for single numbers · LineChart for trends · DataTable for lists",
-              "Same brand tokens. The agent never sees CSS",
+              "Tous les composants du catalogue (21), dans toutes les combinaisons",
+              "StatCard pour un chiffre · LineChart pour une tendance · DataTable pour une liste",
+              "Mêmes jetons de marque. L’agent ne voit jamais le CSS",
             ]}
-            cta="Open the dynamic demo"
+            cta="Ouvrir la démo à schéma dynamique"
           />
         </div>
 
@@ -58,17 +58,17 @@ export default function Home() {
           <div className="flex items-end justify-between mb-4">
             <div>
               <span className="mono text-[11px] uppercase tracking-[0.14em] text-[var(--muted-2)]">
-                The design system
+                Le design system
               </span>
               <h2 className="text-[22px] font-semibold tracking-tight mt-1">
-                21 components, one catalog
+                21 composants, un seul catalogue
               </h2>
             </div>
             <Link
               href="/catalog"
               className="mono text-[12px] text-[var(--ink)] hover:text-[var(--lilac)] transition"
             >
-              See them all →
+              Tous les voir →
             </Link>
           </div>
 
@@ -91,15 +91,15 @@ export default function Home() {
 
         <section className="mt-14 grid md:grid-cols-3 gap-3">
           <Spec
-            k="Frontend"
+            k="Interface"
             v="Next.js 16 · React 19 · Tailwind v4 · @copilotkit/react-core/v2"
           />
           <Spec
-            k="Bridge"
+            k="Passerelle"
             v="@copilotkit/runtime (v2) · @ag-ui/client · a2ui middleware"
           />
           <Spec
-            k="Backend"
+            k="Serveur"
             v="Python · LangChain · LangGraph · FastAPI · ag-ui-langgraph"
           />
         </section>
@@ -108,11 +108,11 @@ export default function Home() {
       <footer className="border-t border-[var(--line)] py-6 mt-10">
         <div className="max-w-[1320px] mx-auto px-6 text-xs text-[var(--muted)] flex items-center justify-between">
           <span>
-            Drop your design tokens into{" "}
+            Déposez vos jetons de design dans{" "}
             <code className="mono px-1.5 py-0.5 rounded bg-[var(--surface-soft)] border border-[var(--line)] text-[11px]">
-              web/src/a2ui/theme.css
+              src/a2ui/theme.css
             </code>{" "}
-            to re-skin every surface.
+            pour réhabiller toutes les surfaces.
           </span>
           <span className="mono">v0.2</span>
         </div>

@@ -9,6 +9,7 @@ import { useToolStepRenderers } from "@/components/ToolStep";
 import { Split } from "@/components/Split";
 import { SampleBar } from "@/components/SampleBar";
 import { SAMPLES } from "@/lib/samples";
+import { CHAT_LABELS } from "@/lib/chat-labels";
 import { usePdfAttachments } from "@/lib/use-pdf-attachments";
 import {
   PdfStatusBar,
@@ -54,9 +55,10 @@ export default function DynamicPage() {
                 }}
                 attachments={attachments}
                 labels={{
-                  chatInputPlaceholder: "Attach a PDF (📎), then ask anything…",
+                  ...CHAT_LABELS,
+                  chatInputPlaceholder: "Posez une question sur le PDF…",
                   welcomeMessageText:
-                    "Attach a PDF using the 📎 button, then ask any question.",
+                    "Joignez un PDF avec le bouton 📎, puis posez n’importe quelle question.",
                 }}
               />
             </div>
@@ -68,11 +70,11 @@ export default function DynamicPage() {
             channel={AGENT_ID}
             emptyState={
               <CanvasEmptyState
-                title="Canvas is empty"
-                subtitle="Attach a PDF in the chat and ask anything. The agent will compose a UI surface using the catalog and render it here."
+                title="Le canevas est vide"
+                subtitle="Joignez un PDF dans la discussion et posez votre question. L’agent compose une surface à partir du catalogue et l’affiche ici."
                 hint={
                   <span className="mono text-[11px] uppercase tracking-[0.14em] text-[var(--ink)]">
-                    try: “Show me the revenue trend.”
+                    essayez : « Montre-moi l’évolution du chiffre d’affaires. »
                   </span>
                 }
               />

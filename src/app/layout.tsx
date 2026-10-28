@@ -16,9 +16,9 @@ const splineMono = Spline_Sans_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CopilotKit × A2UI. Agents that compose your design system",
+  title: "CopilotKit × A2UI. Des agents qui composent votre design system",
   description:
-    "Build agents that compose UI from your own design system via A2UI v0.9. Fixed schemas for predictable layouts, dynamic schemas when the agent should pick the shape.",
+    "Des agents qui composent l’interface à partir de votre propre design system via A2UI v0.9. Schémas fixes pour des mises en page prévisibles, schémas dynamiques quand l’agent choisit la forme.",
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
-      lang="en"
+      lang="fr"
       className={`${plusJakarta.variable} ${splineMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">

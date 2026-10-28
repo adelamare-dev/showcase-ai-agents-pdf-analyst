@@ -35,6 +35,7 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 
 - **Deux dossiers `src/`** : celui du front à la racine, celui de l'agent sous `agent/`. Sans `pyrightconfig.json` (`executionEnvironments: [{root: "agent"}]`), Pylance, ouvert à la racine, résout `from src import …` vers le `src/` du front et signale `"dynamic_agent" is unknown import symbol`. Ne pas supprimer ce fichier, et choisir `agent/.venv` comme interpréteur dans VS Code (Pylance ignore `venvPath`).
 - **Rechargement à chaud de l'agent peu fiable sous Windows.** Après une modification sous `agent/`, uvicorn (`--reload`, StatReload) a déjà affiché `Reloading...` sans jamais redémarrer. Avant un e2e live qui suit une modification de l'agent, relancer `sfw pnpm dev`, puis attendre `Application startup complete.`
+- **Interface en français, formats `fr-FR`.** Les libellés de CopilotKit se traduisent clé par clé (`src/lib/chat-labels.ts`, type `CopilotChatLabels`) ; quelques textes codés en dur dans CopilotKit (infobulle « Add attachments », « Drop files here ») ne passent pas par les labels. Tout nombre affiché passe par `src/lib/format.ts` (espaces insécables `U+202F` / `U+00A0` produits par Intl : les tests acceptent les deux). `src/lib/format.ts` et `src/lib/upload-errors.ts` n’ont aucun import, car Node les exécute directement.
 - **`public/samples/` : uniquement des PDF à licence ouverte, ≤ 30 000 caractères extraits.** Tout ajout se documente dans `public/samples/SOURCES.md` (licence, URL, attribution) ; les exemples cliquables de `/fixed` et `/dynamic` vivent dans `src/lib/samples.ts`.
 
 ## Conventions qui s'écartent de l'évidence
@@ -57,7 +58,7 @@ Niveau par défaut : **standard**.
 - Agent Python : `cd agent && uv run pytest` (modèles factices, aucun appel réseau), puis
   `uv run --with "pyright[nodejs]" pyright src tests` (0 erreur attendue).
 
-- Front, logique pure (plafond du texte PDF) : `pnpm test:web` (`node --test`, sans dépendance), puis `pnpm lint` et `pnpm exec tsc --noEmit`.
+- Front, logique pure (plafond du texte PDF, formats fr-FR, messages de refus d’envoi) : `pnpm test:web` (`node --test`, sans dépendance), puis `pnpm lint` et `pnpm exec tsc --noEmit`.
 - Renderers et catalogue : `/catalog` affiche les 21 composants sans appeler l'agent.
 - Flux agent (`/fixed`, `/dynamic`) : démonstration réelle avec un PDF attaché. Il faut `MISTRAL_API_KEY` dans `agent/.env`, et chaque essai consomme des tokens.
   - Attendu sur `/dynamic` : **une seule** pastille « SURFACE » par tour, avec un graphique dans le canvas. Plusieurs pastilles signalent une boucle d'outil. Un simple titre suivi d'un résumé signale la surface de repli, c'est-à-dire un rendu rejeté deux fois.

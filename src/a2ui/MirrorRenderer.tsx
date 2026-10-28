@@ -29,7 +29,7 @@ function MirrorPill({ ops, agentId }: { ops: A2UIOp[]; agentId?: string }) {
       <span aria-hidden className="text-[var(--ink)]/40">
         →
       </span>
-      <span>rendered in the canvas</span>
+      <span>affichée dans le canevas</span>
     </div>
   );
 }

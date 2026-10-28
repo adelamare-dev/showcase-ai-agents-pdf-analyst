@@ -9,6 +9,7 @@ import { useToolStepRenderers } from "@/components/ToolStep";
 import { Split } from "@/components/Split";
 import { SampleBar } from "@/components/SampleBar";
 import { SAMPLES } from "@/lib/samples";
+import { CHAT_LABELS } from "@/lib/chat-labels";
 import { usePdfAttachments } from "@/lib/use-pdf-attachments";
 import {
   PdfStatusBar,
@@ -53,10 +54,10 @@ export default function FixedPage() {
                 }}
                 attachments={attachments}
                 labels={{
-                  chatInputPlaceholder:
-                    "Attach a PDF (📎), then ask to render the dashboard…",
+                  ...CHAT_LABELS,
+                  chatInputPlaceholder: "Demandez le tableau de bord…",
                   welcomeMessageText:
-                    "Attach a PDF using the 📎 button, then ask: “Render the dashboard.”",
+                    "Joignez un PDF avec le bouton 📎, puis demandez : « Génère le tableau de bord. »",
                 }}
               />
             </div>
@@ -68,11 +69,11 @@ export default function FixedPage() {
             channel={AGENT_ID}
             emptyState={
               <CanvasEmptyState
-                title="Canvas is empty"
-                subtitle="Attach a PDF in the chat (📎 in the input toolbar) and ask the agent to render the dashboard. The rendered A2UI surface will fill this canvas."
+                title="Le canevas est vide"
+                subtitle="Joignez un PDF dans la discussion (📎 dans la barre de saisie) et demandez à l’agent de générer le tableau de bord. La surface A2UI s’affichera ici."
                 hint={
                   <span className="mono text-[11px] uppercase tracking-[0.14em] text-[var(--ink)]">
-                    try: “Render the dashboard.”
+                    essayez : « Génère le tableau de bord. »
                   </span>
                 }
               />

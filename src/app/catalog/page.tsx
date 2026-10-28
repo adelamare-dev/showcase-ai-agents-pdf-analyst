@@ -23,26 +23,31 @@ type Example = {
 };
 
 const sampleSeries = [
-  { label: "Jan", value: 24 },
-  { label: "Feb", value: 32 },
-  { label: "Mar", value: 38 },
-  { label: "Apr", value: 44 },
-  { label: "May", value: 41 },
-  { label: "Jun", value: 52 },
+  { label: "janv.", value: 24 },
+  { label: "févr.", value: 32 },
+  { label: "mars", value: 38 },
+  { label: "avr.", value: 44 },
+  { label: "mai", value: 41 },
+  { label: "juin", value: 52 },
 ];
 
 const sampleShare = [
-  { label: "NA", value: 480 },
+  { label: "Amérique du Nord", value: 480 },
   { label: "EMEA", value: 320 },
   { label: "APAC", value: 200 },
   { label: "LATAM", value: 80 },
 ];
 
 const sampleRows = [
-  { name: "Acme", category: "Mid-market", value: "$48k", delta: "+8%" },
-  { name: "Northwind", category: "Enterprise", value: "$112k", delta: "+12%" },
-  { name: "Globex", category: "SMB", value: "$22k", delta: "-3%" },
-  { name: "Initech", category: "Mid-market", value: "$61k", delta: "+5%" },
+  { name: "Acme", category: "ETI", value: "48\u00a0k€", delta: "+8\u00a0%" },
+  {
+    name: "Northwind",
+    category: "Grand compte",
+    value: "112\u00a0k€",
+    delta: "+12\u00a0%",
+  },
+  { name: "Globex", category: "PME", value: "22\u00a0k€", delta: "-3\u00a0%" },
+  { name: "Initech", category: "ETI", value: "61\u00a0k€", delta: "+5\u00a0%" },
 ];
 
 const sampleRanked = [
@@ -73,7 +78,7 @@ const EXAMPLES: Example[] = [
     group: "layout",
     name: "Stack",
     blurb:
-      "Vertical layout container. Arranges any children top to bottom with consistent gap. The default container for surfaces and sections.",
+      "Conteneur vertical. Empile ses enfants de haut en bas avec un espacement régulier. Le conteneur par défaut des surfaces et des sections.",
     surface: {
       components: [
         {
@@ -86,21 +91,21 @@ const EXAMPLES: Example[] = [
         {
           id: "c1-text",
           component: "Text",
-          text: "First card.",
+          text: "Première carte.",
           weight: "medium",
         },
         { id: "c2", component: "Card", child: "c2-text", tone: "lilac" },
         {
           id: "c2-text",
           component: "Text",
-          text: "Second card.",
+          text: "Deuxième carte.",
           weight: "medium",
         },
         { id: "c3", component: "Card", child: "c3-text", tone: "default" },
         {
           id: "c3-text",
           component: "Text",
-          text: "Third card.",
+          text: "Troisième carte.",
           weight: "medium",
         },
       ],
@@ -110,7 +115,7 @@ const EXAMPLES: Example[] = [
     group: "layout",
     name: "Row",
     blurb:
-      "Horizontal layout. One Row = one horizontal line of children. Stack multiple Rows for table-like layouts; use a single Row for toolbars, metadata strips, and action bars. Shown here: two Rows inside a Stack so the unit of horizontal layout is visible.",
+      "Disposition horizontale. Une Row = une ligne d’enfants. Empilez plusieurs Row pour une mise en page proche d’un tableau ; une seule Row suffit pour une barre d’outils, une bande de métadonnées ou une barre d’actions. Ici : deux Row dans une Stack, pour voir l’unité de disposition horizontale.",
     surface: {
       components: [
         { id: "root", component: "Stack", gap: "xs", children: ["r1", "r2"] },
@@ -124,7 +129,7 @@ const EXAMPLES: Example[] = [
         {
           id: "r1-name",
           component: "Text",
-          text: "Atlas migration",
+          text: "Migration Atlas",
           weight: "medium",
         },
         { id: "r1-sep", component: "Text", text: "·", tone: "muted" },
@@ -138,7 +143,7 @@ const EXAMPLES: Example[] = [
         {
           id: "r1-badge",
           component: "Badge",
-          label: "In progress",
+          label: "En cours",
           tone: "warning",
         },
         {
@@ -151,7 +156,7 @@ const EXAMPLES: Example[] = [
         {
           id: "r2-name",
           component: "Text",
-          text: "Phoenix launch",
+          text: "Lancement Phénix",
           weight: "medium",
         },
         { id: "r2-sep", component: "Text", text: "·", tone: "muted" },
@@ -162,14 +167,14 @@ const EXAMPLES: Example[] = [
           tone: "muted",
           size: "sm",
         },
-        { id: "r2-badge", component: "Badge", label: "Done", tone: "positive" },
+        { id: "r2-badge", component: "Badge", label: "Terminé", tone: "positive" },
       ],
     },
   },
   {
     group: "layout",
     name: "Grid",
-    blurb: "Responsive grid (cols 1 to 6).",
+    blurb: "Grille adaptative (de 1 à 6 colonnes).",
     surface: {
       components: [
         {
@@ -182,25 +187,25 @@ const EXAMPLES: Example[] = [
         {
           id: "s1",
           component: "StatCard",
-          label: "Revenue",
-          value: "$1.2M",
-          delta: "+18%",
+          label: "Chiffre d’affaires",
+          value: "1,2\u00a0M€",
+          delta: "+18\u00a0%",
           deltaTone: "positive",
         },
         {
           id: "s2",
           component: "StatCard",
-          label: "Customers",
-          value: "2,940",
-          delta: "+7%",
+          label: "Clients",
+          value: "2\u00a0940",
+          delta: "+7\u00a0%",
           deltaTone: "positive",
         },
         {
           id: "s3",
           component: "StatCard",
-          label: "Churn",
-          value: "4.4%",
-          delta: "+0.4%",
+          label: "Attrition",
+          value: "4,4\u00a0%",
+          delta: "+0,4\u00a0%",
           deltaTone: "negative",
         },
       ],
@@ -209,17 +214,17 @@ const EXAMPLES: Example[] = [
   {
     group: "layout",
     name: "Card",
-    blurb: "Bordered, padded surface. Tone variants for emphasis.",
+    blurb: "Surface encadrée avec marge intérieure. Des tons permettent d’appuyer un message.",
     surface: {
       components: [
         { id: "root", component: "Row", gap: "sm", children: ["c1", "c2"] },
         { id: "c1", component: "Card", child: "c1-text", tone: "default" },
-        { id: "c1-text", component: "Text", text: "Default tone." },
+        { id: "c1-text", component: "Text", text: "Ton par défaut." },
         { id: "c2", component: "Card", child: "c2-text", tone: "lilac" },
         {
           id: "c2-text",
           component: "Text",
-          text: "Lilac tone.",
+          text: "Ton lilas.",
           weight: "medium",
         },
       ],
@@ -229,21 +234,21 @@ const EXAMPLES: Example[] = [
     group: "layout",
     name: "Section",
     blurb:
-      "Overline + title + a single child component. Use to label a region of the surface.",
+      "Surtitre + titre + un seul composant enfant. Sert à nommer une zone de la surface.",
     surface: {
       components: [
         {
           id: "root",
           component: "Section",
-          eyebrow: "OVERVIEW · Q1",
-          title: "Quarterly revenue",
+          eyebrow: "VUE D’ENSEMBLE · T1",
+          title: "Chiffre d’affaires trimestriel",
           child: "card",
         },
         { id: "card", component: "Card", child: "text" },
         {
           id: "text",
           component: "Text",
-          text: "Total revenue grew 18% QoQ, driven by mid-market expansion.",
+          text: "Le chiffre d’affaires total progresse de 18\u00a0% sur le trimestre, porté par les ETI.",
           tone: "muted",
         },
       ],
@@ -252,7 +257,7 @@ const EXAMPLES: Example[] = [
   {
     group: "layout",
     name: "Divider",
-    blurb: "1px line between sections.",
+    blurb: "Filet de 1 px entre deux sections.",
     surface: {
       components: [
         {
@@ -261,9 +266,9 @@ const EXAMPLES: Example[] = [
           gap: "sm",
           children: ["t1", "d", "t2"],
         },
-        { id: "t1", component: "Text", text: "Above the line." },
+        { id: "t1", component: "Text", text: "Au-dessus du filet." },
         { id: "d", component: "Divider" },
-        { id: "t2", component: "Text", text: "Below the line.", tone: "muted" },
+        { id: "t2", component: "Text", text: "Sous le filet.", tone: "muted" },
       ],
     },
   },
@@ -271,7 +276,7 @@ const EXAMPLES: Example[] = [
   {
     group: "content",
     name: "Heading",
-    blurb: "Level 1/2/3 for page, section, sub-block.",
+    blurb: "Niveaux 1, 2 et 3 : page, section, sous-bloc.",
     surface: {
       components: [
         {
@@ -280,16 +285,16 @@ const EXAMPLES: Example[] = [
           gap: "xs",
           children: ["h1", "h2", "h3"],
         },
-        { id: "h1", component: "Heading", level: "1", text: "Heading 1" },
-        { id: "h2", component: "Heading", level: "2", text: "Heading 2" },
-        { id: "h3", component: "Heading", level: "3", text: "Heading 3" },
+        { id: "h1", component: "Heading", level: "1", text: "Titre 1" },
+        { id: "h2", component: "Heading", level: "2", text: "Titre 2" },
+        { id: "h3", component: "Heading", level: "3", text: "Titre 3" },
       ],
     },
   },
   {
     group: "content",
     name: "Text",
-    blurb: "Body copy. Tone, size, weight.",
+    blurb: "Texte courant. Ton, taille, graisse.",
     surface: {
       components: [
         {
@@ -301,19 +306,19 @@ const EXAMPLES: Example[] = [
         {
           id: "t1",
           component: "Text",
-          text: "Default body copy.",
+          text: "Texte courant par défaut.",
           weight: "medium",
         },
         {
           id: "t2",
           component: "Text",
-          text: "Muted secondary text.",
+          text: "Texte secondaire atténué.",
           tone: "muted",
         },
         {
           id: "t3",
           component: "Text",
-          text: "Small caption.",
+          text: "Petite légende.",
           tone: "muted",
           size: "sm",
         },
@@ -324,19 +329,19 @@ const EXAMPLES: Example[] = [
     group: "content",
     name: "Overline",
     blurb:
-      "Tiny ALL-CAPS mono label that sits above a heading. The 'overline' typography pattern (Material Design term). Use for category labels.",
+      "Petite étiquette monospace en capitales, placée au-dessus d’un titre (le motif typographique « overline » de Material Design). Sert aux étiquettes de catégorie.",
     surface: {
       components: [
         { id: "root", component: "Stack", gap: "xs", children: ["e", "h"] },
-        { id: "e", component: "Overline", text: "DEMO · 03" },
-        { id: "h", component: "Heading", level: "2", text: "Section heading" },
+        { id: "e", component: "Overline", text: "DÉMO · 03" },
+        { id: "h", component: "Heading", level: "2", text: "Titre de section" },
       ],
     },
   },
   {
     group: "content",
     name: "Badge",
-    blurb: "Inline status pill. 5 tones.",
+    blurb: "Pastille d’état en ligne. 5 tons.",
     surface: {
       components: [
         {
@@ -345,10 +350,10 @@ const EXAMPLES: Example[] = [
           gap: "xs",
           children: ["b1", "b2", "b3", "b4", "b5"],
         },
-        { id: "b1", component: "Badge", label: "Neutral", tone: "neutral" },
+        { id: "b1", component: "Badge", label: "Neutre", tone: "neutral" },
         { id: "b2", component: "Badge", label: "Info", tone: "info" },
-        { id: "b3", component: "Badge", label: "Positive", tone: "positive" },
-        { id: "b4", component: "Badge", label: "Warning", tone: "warning" },
+        { id: "b3", component: "Badge", label: "Positif", tone: "positive" },
+        { id: "b4", component: "Badge", label: "Attention", tone: "warning" },
         { id: "b5", component: "Badge", label: "Danger", tone: "danger" },
       ],
     },
@@ -356,7 +361,7 @@ const EXAMPLES: Example[] = [
   {
     group: "content",
     name: "Callout",
-    blurb: "Block-level highlight for a key insight or definition.",
+    blurb: "Encadré pour mettre en avant une idée clé ou une définition.",
     surface: {
       components: [
         { id: "root", component: "Stack", gap: "sm", children: ["c1", "c2"] },
@@ -364,15 +369,15 @@ const EXAMPLES: Example[] = [
           id: "c1",
           component: "Callout",
           tone: "info",
-          title: "Key insight",
-          body: "Transformers replaced recurrence with attention, so every token can read every other token in one step.",
+          title: "Idée clé",
+          body: "Les transformeurs ont remplacé la récurrence par l’attention : chaque jeton peut lire tous les autres en une seule étape.",
         },
         {
           id: "c2",
           component: "Callout",
           tone: "warning",
-          title: "Caveat",
-          body: "The attention layer scales quadratically with sequence length. Long contexts get expensive fast.",
+          title: "Réserve",
+          body: "La couche d’attention croît de façon quadratique avec la longueur de la séquence : les contextes longs deviennent vite coûteux.",
         },
       ],
     },
@@ -381,7 +386,7 @@ const EXAMPLES: Example[] = [
     group: "content",
     name: "BulletList",
     blurb:
-      "Short bulleted or numbered enumerations. Pass `ordered: true` for a numbered list.",
+      "Énumérations courtes, à puces ou numérotées. `ordered: true` donne une liste numérotée.",
     surface: {
       components: [
         {
@@ -390,22 +395,22 @@ const EXAMPLES: Example[] = [
           gap: "md",
           children: ["h1", "ul", "h2", "ol"],
         },
-        { id: "h1", component: "Overline", text: "BULLETED" },
+        { id: "h1", component: "Overline", text: "À PUCES" },
         {
           id: "ul",
           component: "BulletList",
           items: [
-            "A new attention mechanism that scales near-linearly.",
-            "A training recipe that halves wall-clock time.",
-            "An evaluation benchmark released alongside the paper.",
+            "Un nouveau mécanisme d’attention dont le coût croît presque linéairement.",
+            "Une méthode d’entraînement qui divise le temps par deux.",
+            "Un banc d’essai publié avec l’article.",
           ],
         },
-        { id: "h2", component: "Overline", text: "NUMBERED" },
+        { id: "h2", component: "Overline", text: "NUMÉROTÉE" },
         {
           id: "ol",
           component: "BulletList",
           ordered: true,
-          items: ["Read the abstract.", "Skim Table 3.", "Run the colab."],
+          items: ["Lire le résumé.", "Parcourir le tableau 3.", "Lancer le notebook."],
         },
       ],
     },
@@ -414,17 +419,17 @@ const EXAMPLES: Example[] = [
   {
     group: "data",
     name: "StatCard",
-    blurb: "Single-metric card with delta + caption.",
+    blurb: "Carte d’un indicateur unique, avec variation et légende.",
     surface: {
       components: [
         {
           id: "root",
           component: "StatCard",
           label: "MRR",
-          value: "$48,200",
-          delta: "+12.4%",
+          value: "48\u00a0200\u00a0€",
+          delta: "+12,4\u00a0%",
           deltaTone: "positive",
-          caption: "vs. prev month",
+          caption: "vs mois précédent",
         },
       ],
     },
@@ -432,7 +437,7 @@ const EXAMPLES: Example[] = [
   {
     group: "data",
     name: "BarChart",
-    blurb: "Vertical bars from [{label,value}]. Use when labels are short.",
+    blurb: "Barres verticales à partir de [{label,value}]. Pour des étiquettes courtes.",
     surface: {
       components: [
         { id: "root", component: "BarChart", height: 220, data: sampleSeries },
@@ -442,7 +447,7 @@ const EXAMPLES: Example[] = [
   {
     group: "data",
     name: "HorizontalBarChart",
-    blurb: "Bars rendered as rows. Use for ranked lists where labels are long.",
+    blurb: "Barres en lignes. Pour des classements aux étiquettes longues.",
     surface: {
       components: [
         {
@@ -457,7 +462,7 @@ const EXAMPLES: Example[] = [
   {
     group: "data",
     name: "LineChart",
-    blurb: "Time-series line for trends where direction matters.",
+    blurb: "Courbe temporelle, quand c’est le sens de la tendance qui compte.",
     surface: {
       components: [
         { id: "root", component: "LineChart", height: 220, data: sampleSeries },
@@ -467,7 +472,7 @@ const EXAMPLES: Example[] = [
   {
     group: "data",
     name: "DonutChart",
-    blurb: "Share-of-total donut. 3 to 6 slices.",
+    blurb: "Anneau de répartition. De 3 à 6 parts.",
     surface: {
       components: [
         { id: "root", component: "DonutChart", height: 220, data: sampleShare },
@@ -478,15 +483,15 @@ const EXAMPLES: Example[] = [
     group: "data",
     name: "ScatterChart",
     blurb:
-      "X/Y dots for correlation. Always pass xLabel and yLabel so people know what each axis is.",
+      "Nuage de points X/Y pour une corrélation. Renseignez toujours xLabel et yLabel pour nommer chaque axe.",
     surface: {
       components: [
         {
           id: "root",
           component: "ScatterChart",
           height: 240,
-          xLabel: "Months on platform",
-          yLabel: "Weekly active hours",
+          xLabel: "Mois sur la plateforme",
+          yLabel: "Heures actives par semaine",
           data: sampleScatter,
         },
       ],
@@ -495,16 +500,16 @@ const EXAMPLES: Example[] = [
   {
     group: "data",
     name: "DataTable",
-    blurb: "Rows × columns with right-aligned numerics.",
+    blurb: "Lignes × colonnes, valeurs numériques alignées à droite.",
     surface: {
       components: [
         {
           id: "root",
           component: "DataTable",
           columns: [
-            { key: "name", label: "Customer", align: "left" },
+            { key: "name", label: "Client", align: "left" },
             { key: "category", label: "Segment", align: "left" },
-            { key: "value", label: "ARR", align: "right" },
+            { key: "value", label: "Revenu annuel", align: "right" },
             { key: "delta", label: "Δ", align: "right" },
           ],
           rows: sampleRows,
@@ -516,28 +521,28 @@ const EXAMPLES: Example[] = [
   {
     group: "interactive",
     name: "Button",
-    blurb: "Primary / secondary / ghost.",
+    blurb: "Principal / secondaire / discret.",
     surface: {
       components: [
         { id: "root", component: "Row", gap: "sm", children: ["p", "s", "g"] },
         {
           id: "p",
           component: "Button",
-          label: "Primary",
+          label: "Principal",
           variant: "primary",
           action: { event: { name: "noop" } },
         },
         {
           id: "s",
           component: "Button",
-          label: "Secondary",
+          label: "Secondaire",
           variant: "secondary",
           action: { event: { name: "noop" } },
         },
         {
           id: "g",
           component: "Button",
-          label: "Ghost",
+          label: "Discret",
           variant: "ghost",
           action: { event: { name: "noop" } },
         },
@@ -547,15 +552,15 @@ const EXAMPLES: Example[] = [
   {
     group: "interactive",
     name: "ChoiceChips",
-    blurb: "Multi-select pills bound to a data path.",
+    blurb: "Pastilles à choix multiple liées à un chemin de données.",
     surface: {
       components: [
         {
           id: "root",
           component: "ChoiceChips",
-          label: "Regions",
+          label: "Régions",
           options: [
-            { label: "NA", value: "na" },
+            { label: "Amérique du Nord", value: "na" },
             { label: "EMEA", value: "emea" },
             { label: "APAC", value: "apac" },
             { label: "LATAM", value: "latam" },
@@ -569,10 +574,10 @@ const EXAMPLES: Example[] = [
 ];
 
 const GROUPS: { key: Example["group"]; label: string }[] = [
-  { key: "layout", label: "Layout" },
-  { key: "content", label: "Content" },
-  { key: "data", label: "Data viz" },
-  { key: "interactive", label: "Interactive" },
+  { key: "layout", label: "Mise en page" },
+  { key: "content", label: "Contenu" },
+  { key: "data", label: "Données" },
+  { key: "interactive", label: "Interactif" },
 ];
 
 export default function CatalogPage() {
@@ -584,25 +589,25 @@ export default function CatalogPage() {
     <>
       <SiteNav active="catalog" />
       <PageHeader
-        eyebrow="THE DESIGN SYSTEM"
+        eyebrow="LE DESIGN SYSTEM"
         meta={
           <span className="pill">
-            <span className="dot" /> {EXAMPLES.length} components
+            <span className="dot" /> {EXAMPLES.length} composants
           </span>
         }
         title={
           <>
-            Every component the agent <br className="hidden md:inline" />
-            <span className="text-[var(--muted)]">is allowed to draw.</span>
+            Chaque composant que l’agent <br className="hidden md:inline" />
+            <span className="text-[var(--muted)]">a le droit de dessiner.</span>
           </>
         }
-        subtitle="One catalog, one set of React renderers, one set of brand tokens. Both demos compose from this. The fixed dashboard via a pre-authored layout, the dynamic Q&A by inventing one per question."
+        subtitle="Un catalogue, un jeu de rendus React, un jeu de jetons de marque. Les deux démos en sont issues : le tableau de bord fixe via une mise en page écrite d’avance, les questions-réponses dynamiques en inventant une mise en page par question."
       />
 
       <main className="flex-1 max-w-[1320px] mx-auto px-6 py-8 w-full">
         <div className="flex items-center gap-2 mb-6">
           <FilterBtn
-            label="All"
+            label="Tous"
             active={filter === "all"}
             onClick={() => setFilter("all")}
           />
@@ -615,7 +620,7 @@ export default function CatalogPage() {
             />
           ))}
           <span className="ml-auto mono text-[11px] text-[var(--muted-2)] uppercase tracking-wider">
-            showing {items.length} / {EXAMPLES.length}
+            {items.length} / {EXAMPLES.length} affichés
           </span>
         </div>
 
@@ -629,13 +634,13 @@ export default function CatalogPage() {
       <footer className="border-t border-[var(--line)] py-6 mt-10">
         <div className="max-w-[1320px] mx-auto px-6 text-xs text-[var(--muted)] flex items-center justify-between">
           <span>
-            Definitions:{" "}
+            Définitions :{" "}
             <code className="mono px-1.5 py-0.5 rounded bg-[var(--surface-soft)] border border-[var(--line)] text-[11px]">
-              web/src/a2ui/catalog/definitions.ts
+              src/a2ui/catalog/definitions.ts
             </code>{" "}
-            · Renderers:{" "}
+            · Rendus :{" "}
             <code className="mono px-1.5 py-0.5 rounded bg-[var(--surface-soft)] border border-[var(--line)] text-[11px]">
-              web/src/a2ui/catalog/renderers.tsx
+              src/a2ui/catalog/renderers.tsx
             </code>
           </span>
           <span className="mono">v0.2</span>
@@ -681,7 +686,7 @@ function ShowcaseTile({ example }: { example: Example }) {
           </div>
         </div>
         <span className="mono text-[10.5px] uppercase tracking-wider text-[var(--muted-2)] px-2 py-0.5 rounded-full border border-[var(--line)]">
-          {example.group}
+          {GROUPS.find((g) => g.key === example.group)?.label ?? example.group}
         </span>
       </header>
       <div className="p-5 bg-[var(--surface-soft)] flex-1">

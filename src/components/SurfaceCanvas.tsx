@@ -161,7 +161,9 @@ function readContextLabel(ctx: unknown): string | undefined {
 }
 
 function humanizeAction(name: string, hint?: string): string {
-  if (name === "select_chip" && hint) return `Switch scope → ${prettify(hint)}`;
+  if (name === "select_chip" && hint) {
+    return `Changer de périmètre → ${prettify(hint)}`;
+  }
   if (hint) return `${prettify(name)} → ${prettify(hint)}`;
   return prettify(name);
 }

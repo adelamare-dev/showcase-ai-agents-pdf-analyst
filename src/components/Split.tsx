@@ -114,7 +114,7 @@ export function Split({
     <div ref={containerRef} className="flex-1 min-h-0 flex">
       <div
         style={{ width: leftPct }}
-        className="shrink-0 h-full overflow-hidden border-r border-[var(--line)] bg-[var(--surface)]"
+        className="shrink-0 min-w-[320px] h-full overflow-hidden border-r border-[var(--line)] bg-[var(--surface)]"
       >
         {left}
       </div>
@@ -123,7 +123,7 @@ export function Split({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize chat sidebar"
+        aria-label="Redimensionner le panneau de discussion"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
