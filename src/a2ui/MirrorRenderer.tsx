@@ -12,7 +12,13 @@ const ContentSchema = z.object({
 
 type Content = z.infer<typeof ContentSchema>;
 
-function MirrorPill({ ops, agentId }: { ops: A2UIOp[]; agentId?: string }) {
+function MirrorPill({
+  ops,
+  agentId,
+}: {
+  ops: A2UIOp[];
+  agentId?: string;
+}) {
   useEffect(() => {
     if (!ops?.length) return;
     console.log(
@@ -21,12 +27,12 @@ function MirrorPill({ ops, agentId }: { ops: A2UIOp[]; agentId?: string }) {
     surfaceBus.push(agentId ?? "default", ops);
   }, [ops, agentId]);
   return (
-    <div className="my-1.5 inline-flex items-center gap-2 max-w-fit px-3 py-2 rounded-full border border-[var(--line)] bg-[color-mix(in_oklab,var(--lilac)_8%,var(--surface))] text-[12.5px] text-[var(--ink)] font-medium leading-none">
-      <span className="w-2 h-2 rounded-full bg-[var(--lilac)] shadow-[0_0_0_3px_color-mix(in_oklab,var(--lilac)_30%,transparent)]" />
-      <span className="mono uppercase tracking-[0.1em] text-[10.5px] text-[var(--ink)]">
+    <div className='my-1.5 inline-flex items-center gap-2 max-w-fit px-3 py-2 rounded-full border border-line bg-[color-mix(in_oklab,var(--lilac)_8%,var(--surface))] text-[12.5px] text-ink font-medium leading-none'>
+      <span className='w-2 h-2 rounded-full bg-lilac shadow-[0_0_0_3px_color-mix(in_oklab,var(--lilac)_30%,transparent)]' />
+      <span className='mono uppercase tracking-widest text-[10.5px] text-ink'>
         surface
       </span>
-      <span aria-hidden className="text-[var(--ink)]/40">
+      <span aria-hidden className='text-(--ink)/40'>
         →
       </span>
       <span>affichée dans le canevas</span>
