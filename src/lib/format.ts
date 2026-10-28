@@ -11,7 +11,17 @@ const PERCENT = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
 
+// "min2" groups only from five digits, so a year stays "2023" in a table
+// while 12345 becomes "12 345".
+const TABLE_NUMBER = new Intl.NumberFormat("fr-FR", {
+  maximumFractionDigits: 2,
+  useGrouping: "min2",
+});
+
 export const formatNumber = (n: number): string => NUMBER.format(n);
+
+/** Table cells: like `formatNumber`, but 4-digit values (years) are not grouped. */
+export const formatTableNumber = (n: number): string => TABLE_NUMBER.format(n);
 
 /** Axis ticks and tooltips: 1 500 000 becomes "1,5 M". */
 export const formatCompact = (n: number): string => COMPACT.format(n);
@@ -80,5 +90,7 @@ export function autoDelta(value?: string, caption?: string): string | null {
   if (!isFinite(pct)) return null;
   // One decimal under 10 %, whole percents beyond: easier to scan.
   const rounded = Math.abs(pct) < 10 ? Math.round(pct * 10) / 10 : Math.round(pct);
-  return `${rounded >= 0 ? "+" : ""}${formatPercent(rounded / 100)}`;
+  // A movement that rounds to zero carries no sign.
+  if (rounded === 0) return formatPercent(0);
+  return `${rounded > 0 ? "+" : ""}${formatPercent(rounded / 100)}`;
 }

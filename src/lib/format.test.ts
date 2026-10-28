@@ -5,6 +5,7 @@ import {
   formatCompact,
   formatNumber,
   formatPercent,
+  formatTableNumber,
   parseAmount,
 } from "./format.ts";
 
@@ -17,6 +18,12 @@ test("formatNumber groups thousands and uses a decimal comma", () => {
   assert.match(formatNumber(1234.5), re("^1_234,5$"));
   assert.equal(formatNumber(-0.8), "-0,8");
   assert.equal(formatNumber(950), "950");
+});
+
+test("formatTableNumber leaves 4-digit values ungrouped", () => {
+  assert.equal(formatTableNumber(2023), "2023");
+  assert.match(formatTableNumber(12345), re("^12_345$"));
+  assert.match(formatTableNumber(1234.5), re("^1234,5$"));
 });
 
 test("formatCompact abbreviates with a French suffix", () => {
@@ -61,6 +68,13 @@ test("autoDelta computes a signed percentage from a comparison caption", () => {
     autoDelta("90 k€", "par rapport à 100 k€ précédemment") ?? "",
     re("^-10_%$"),
   );
+});
+
+test("autoDelta prints a zero movement without a sign", () => {
+  for (const value of ["99,99 M€", "100,01 M€", "100 M€"]) {
+    const d = autoDelta(value, "vs 100 M€") ?? "";
+    assert.match(d, re("^0_%$"));
+  }
 });
 
 test("autoDelta ignores captions that are not comparisons", () => {

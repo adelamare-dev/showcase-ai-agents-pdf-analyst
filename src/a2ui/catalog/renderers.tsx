@@ -20,7 +20,12 @@ import {
   YAxis,
 } from "recharts";
 import type { RendererProps } from "@copilotkit/a2ui-renderer";
-import { autoDelta, formatCompact, formatNumber } from "@/lib/format";
+import {
+  autoDelta,
+  formatCompact,
+  formatPercent,
+  formatTableNumber,
+} from "@/lib/format";
 
 /* The runtime walks `{path}` bindings against the data model before
  * handing props to renderers, so every prop value below is post-resolution. */
@@ -536,6 +541,7 @@ const BarChart = ({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
+            formatter={(v: unknown) => formatCompact(Number(v))}
             cursor={{ fill: "var(--lilac-softer)" }}
           />
           <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="var(--lilac)">
@@ -592,6 +598,7 @@ const LineChart = ({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
+            formatter={(v: unknown) => formatCompact(Number(v))}
           />
           <Line
             type="monotone"
@@ -657,6 +664,7 @@ const HorizontalBarChart = ({
             contentStyle={tooltipStyle}
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
+            formatter={(v: unknown) => formatCompact(Number(v))}
             cursor={{ fill: "var(--lilac-softer)" }}
           />
           <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="var(--lilac)">
@@ -819,8 +827,8 @@ const DonutChart = ({
               <span className="mono tabular-nums text-[12.5px] text-[var(--ink)] font-medium shrink-0">
                 {formatCompact(d.value)}
               </span>
-              <span className="mono text-[11px] text-[var(--ink)] shrink-0 w-9 text-right">
-                {pct}%
+              <span className="mono text-[11px] text-[var(--ink)] shrink-0 w-12 text-right">
+                {formatPercent(pct / 100)}
               </span>
             </li>
           );
@@ -871,7 +879,7 @@ const DataTable = ({
                   raw == null
                     ? ""
                     : typeof raw === "number"
-                      ? formatNumber(raw)
+                      ? formatTableNumber(raw)
                       : String(raw);
                 const looksLikeDelta = c.key === "delta" || c.key === "Δ";
                 const meaningful = !looksLikeDelta || hasMeaningfulDelta(text);
