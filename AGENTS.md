@@ -32,6 +32,9 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 - **`enableInspector={false}` est voulu** (`src/components/Providers.tsx`). L'Inspector de dev se monte par défaut sur localhost et appelle `GET /api/copilotkit/threads?agentId=*` — endpoint multi-route inexistant en `single-route` → salve de 3×404 + annonces CDN + télémétrie à chaque montage/rechargement/reconnexion HMR. Le réactiver fait revenir la salve (audit : `SETUP/2026-10-27-orchestration-loop/`).
 - **Cache Turbopack dev périmé = boots froids** (mesuré sur Windows). Si chaque `sfw pnpm dev` recompile à froid (~15-25 s/page au 1ᵉʳ hit), vider `.next/dev/cache/turbopack` : un cache périmé/enflé ne restaure rien, un cache frais redonne des boots ~2 s. Ne pas mélanger `next build` et `next dev` sur le même `.next`. Vérif : `node SETUP/2026-10-27-orchestration-loop/evidence/probe-orchestration.mjs` (verdict D ≤ 5000 ms).
 
+- **Deux dossiers `src/`** : celui du front à la racine, celui de l'agent sous `agent/`. Sans `pyrightconfig.json` (`executionEnvironments: [{root: "agent"}]`), Pylance, ouvert à la racine, résout `from src import …` vers le `src/` du front et signale `"dynamic_agent" is unknown import symbol`. Ne pas supprimer ce fichier, et choisir `agent/.venv` comme interpréteur dans VS Code (Pylance ignore `venvPath`).
+- **Rechargement à chaud de l'agent peu fiable sous Windows.** Après une modification sous `agent/`, uvicorn (`--reload`, StatReload) a déjà affiché `Reloading...` sans jamais redémarrer. Avant un e2e live qui suit une modification de l'agent, relancer `sfw pnpm dev`, puis attendre `Application startup complete.`
+
 ## Conventions qui s'écartent de l'évidence
 
 - **Politique de dépendances stricte, des deux côtés.**
@@ -49,10 +52,13 @@ Fork **autonome** de `CopilotKit/examples/showcases/a2ui-pdf-analyst` : aucune r
 
 Niveau par défaut : **standard**.
 
-- Agent Python : `cd agent && uv run pytest` (modèles factices, aucun appel réseau).
+- Agent Python : `cd agent && uv run pytest` (modèles factices, aucun appel réseau), puis
+  `uv run --with "pyright[nodejs]" pyright src tests` (0 erreur attendue).
 
 - Renderers et catalogue : `/catalog` affiche les 21 composants sans appeler l'agent.
 - Flux agent (`/fixed`, `/dynamic`) : démonstration réelle avec un PDF attaché. Il faut `MISTRAL_API_KEY` dans `agent/.env`, et chaque essai consomme des tokens.
+  - Attendu sur `/dynamic` : **une seule** pastille « SURFACE » par tour, avec un graphique dans le canvas. Plusieurs pastilles signalent une boucle d'outil. Un simple titre suivi d'un résumé signale la surface de repli, c'est-à-dire un rendu rejeté deux fois.
+  - Le temps d'un tour se lit côté serveur, dans la ligne `POST /api/copilotkit 200 in …` du terminal. Repères au Jalon 1 : environ 12 s sur `/fixed`, 17 à 30 s sur `/dynamic`.
 
 ## Rétrospectives
 
