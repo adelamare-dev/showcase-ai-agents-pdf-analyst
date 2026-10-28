@@ -60,7 +60,7 @@ Niveau par défaut : **standard**.
 - Renderers et catalogue : `/catalog` affiche les 21 composants sans appeler l'agent.
 - Flux agent (`/fixed`, `/dynamic`) : démonstration réelle avec un PDF attaché. Il faut `MISTRAL_API_KEY` dans `agent/.env`, et chaque essai consomme des tokens.
   - Attendu sur `/dynamic` : **une seule** pastille « SURFACE » par tour, avec un graphique dans le canvas. Plusieurs pastilles signalent une boucle d'outil. Un simple titre suivi d'un résumé signale la surface de repli, c'est-à-dire un rendu rejeté deux fois.
-  - Le temps d'un tour se lit côté serveur, dans la ligne `POST /api/copilotkit 200 in …` du terminal. Repères mesurés (2026-10-28, exemples de `public/samples/`) : 12 à 17 s sur `/fixed`, 11 à 36 s sur `/dynamic`, le premier tour après le démarrage étant le plus lent. Timeout par appel : 30 s (`agent/src/models.py`).
+  - Le temps d'un tour se lit côté serveur, dans la ligne `POST /api/copilotkit 200 in …` du terminal. Repères mesurés (2026-10-28, exemples de `public/samples/`) : 12 à 17 s sur `/fixed`, 11 à 36 s sur `/dynamic`, le premier tour après le démarrage étant le plus lent. Timeout par appel : 45 s (`agent/src/models.py`).
 
 ## Rétrospectives
 

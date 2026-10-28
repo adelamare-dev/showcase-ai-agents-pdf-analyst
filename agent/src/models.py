@@ -19,11 +19,13 @@ The render role has been escalated once: on 3B, follow-up questions came back
 as nested component trees that failed validation twice in a row, so the user
 only got the text fallback. 8B returns the flat component list.
 
-Retries and timeout are deliberately tight (one retry, 30 s): a rendering call
-that is going to fail should fail fast so the user is told, instead of
-watching a spinner for minutes behind several silent retries. The timeout is
-1.5 times the longest single call measured with `scripts/measure.py` (16.1 s,
-rendering on ministral-8b-2512), raised to a 30 s floor.
+Each call makes one attempt. LangChain's `max_retries` counts attempts
+(`stop_after_attempt`), so `MAX_RETRIES = 1` means no retry, and only transport
+errors are retried at all: HTTP status errors such as 429 or 5xx are never
+retried. A call that is going to fail should fail fast so the user is told,
+instead of watching a spinner behind silent retries. The timeout is 1.5 times
+the slowest call measured with `scripts/measure.py` (30.5 s, rendering on
+ministral-8b-2512, which timed out at 30 s), capped at 45 s.
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ AGENT_MODEL = "ministral-3b-2512"
 EXTRACTOR_MODEL = "ministral-3b-2512"
 RENDER_MODEL = "ministral-8b-2512"
 
-REQUEST_TIMEOUT_S = 30
+REQUEST_TIMEOUT_S = 45
 MAX_RETRIES = 1
 
 

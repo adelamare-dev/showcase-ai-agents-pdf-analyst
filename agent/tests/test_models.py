@@ -16,7 +16,7 @@ def test_chat_model_pins_mistral_params():
     assert m.model == "ministral-8b-2512"
     assert m.temperature == 0
     assert m.max_retries == 1
-    assert REQUEST_TIMEOUT_S == 30
+    assert REQUEST_TIMEOUT_S == 45
     assert m.timeout == REQUEST_TIMEOUT_S
 
 

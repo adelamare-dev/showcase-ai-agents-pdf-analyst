@@ -150,7 +150,7 @@ On `/fixed` after attaching a PDF:
 
 ## Development
 
-Model IDs, temperature (0), one retry and a 30 s timeout per call live in `agent/src/models.py`; the timeout was set from a measurement.
+Model IDs, temperature (0), a single attempt per call (no retry) and a 45 s timeout live in `agent/src/models.py`; the timeout was set from a measurement.
 
 ```bash
 pnpm test:web                         # front pure logic (node --test)
