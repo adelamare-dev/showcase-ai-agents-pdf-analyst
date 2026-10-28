@@ -10,6 +10,7 @@ user action back to the agent, which re-renders with the new scope.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TypedDict
 
@@ -24,7 +25,11 @@ from src.locale import FRENCH_OUTPUT_RULE
 from src.models import agent_chat_model
 
 SCHEMA_DIR = Path(__file__).parent / "a2ui" / "schemas"
-DASHBOARD_SCHEMA = a2ui.load_schema(SCHEMA_DIR / "dashboard.json")
+# Read explicitly as UTF-8: a2ui.load_schema opens the file without an encoding,
+# which decodes accents as cp1252 on Windows.
+DASHBOARD_SCHEMA = json.loads(
+    (SCHEMA_DIR / "dashboard.json").read_text(encoding="utf-8")
+)
 SURFACE = "pdf-dashboard"
 
 

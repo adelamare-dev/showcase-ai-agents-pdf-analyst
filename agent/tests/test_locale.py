@@ -1,3 +1,5 @@
+import json
+
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src import dynamic_agent, fixed_agent, pdf_tools
@@ -73,3 +75,9 @@ def test_dashboard_schema_has_no_english_static_label():
         '"Value"',
     ):
         assert english not in schema, english
+
+
+def test_dashboard_schema_keeps_non_ascii_labels_intact():
+    serialized = json.dumps(fixed_agent.DASHBOARD_SCHEMA, ensure_ascii=False)
+    assert "Périmètre" in serialized
+    assert "Δ" in serialized
