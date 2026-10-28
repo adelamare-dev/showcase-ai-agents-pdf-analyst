@@ -44,7 +44,7 @@
   {
     "id": "scope-chips",
     "component": "ChoiceChips",
-    "label": "Scope",
+    "label": "Périmètre",
     "value": { "path": "/scope/selected" },
     "options": { "path": "/scope/options" }
   },
@@ -104,7 +104,7 @@
     "id": "trend-section",
     "component": "Section",
     "eyebrow": "TREND",
-    "title": "Monthly performance",
+    "title": "Performance mensuelle",
     "child": "trend-card"
   },
   {
@@ -122,7 +122,7 @@
     "id": "share-section",
     "component": "Section",
     "eyebrow": "SHARE OF TOTAL",
-    "title": "Breakdown",
+    "title": "Répartition",
     "child": "share-card"
   },
   {
@@ -141,7 +141,7 @@
     "id": "table-section",
     "component": "Section",
     "eyebrow": "DETAIL",
-    "title": "Top rows",
+    "title": "Principales lignes",
     "child": "table-card"
   },
   {
@@ -153,9 +153,9 @@
     "id": "table",
     "component": "DataTable",
     "columns": [
-      { "key": "name", "label": "Name", "align": "left" },
-      { "key": "category", "label": "Category", "align": "left" },
-      { "key": "value", "label": "Value", "align": "right" },
+      { "key": "name", "label": "Nom", "align": "left" },
+      { "key": "category", "label": "Catégorie", "align": "left" },
+      { "key": "value", "label": "Valeur", "align": "right" },
       { "key": "delta", "label": "Δ", "align": "right" }
     ],
     "rows": { "path": "/rows" }

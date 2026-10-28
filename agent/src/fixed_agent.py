@@ -20,6 +20,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
+from src.locale import FRENCH_OUTPUT_RULE
 from src.models import agent_chat_model
 
 SCHEMA_DIR = Path(__file__).parent / "a2ui" / "schemas"
@@ -71,32 +72,35 @@ def render_dashboard(
       - kpis: EXACTLY 4 cards. Each {label, value, delta, caption}.
 
         STRICT FIELD RULES (very important; the badge breaks if you ignore):
-          * `value`   = the headline number, formatted ("$94,930M", "23.4%",
-                        "1.2M units"). 1–8 chars typically.
+          * `value`   = the headline number, formatted the French way
+                        ("94 930 M€", "23,4 %", "1,2 M d'unités"). 1–8 chars
+                        typically.
           * `delta`   = JUST the magnitude of change. Format: "+X%", "-X%",
                         or "" (empty string when there's no comparison).
+                        Number and "%" are separated by a space; the "+" or
+                        "-" sign sticks to the number.
                         MAX 8 chars. NEVER prose. NEVER "vs. last quarter"
-                        or "vs. $89,498M". The arrow and color come from
+                        or "vs 89 498 M€". The arrow and color come from
                         the renderer.
-                        Examples: "+6.1%", "-3%", "+12%", "+$2.4B", ""
-                        Bad:      "↑ vs. $89,498M in Q4 FY23"
-                                  "up 6% YoY"
-                                  "increased from $89,498M"
-          * `caption` = the comparison/context sentence ("vs. $89,498M in
-                        Q4 FY23", "Products $69,958M; Services $24,972M",
-                        "All-time high"). Up to ~80 chars. This is where
-                        the prose goes.
+                        Examples: "+6,1 %", "-3 %", "+12 %", "+2,4 Md€", ""
+                        Bad:      "↑ vs 89 498 M€ au T4 2023"
+                                  "en hausse de 6 % sur un an"
+                                  "en hausse par rapport à 89 498 M€"
+          * `caption` = the comparison/context sentence ("vs 89 498 M€ au
+                        T4 2023", "Produits 69 958 M€ ; Services 24 972 M€",
+                        "Plus haut historique"). Up to ~80 chars. This is
+                        where the prose goes.
 
       - trend: 6–12 points. {label, value:number}.
       - share: 3–5 slices. {label, value:number}.
       - rows: 5–8 table rows. Same delta rule applies: row.delta is
-        SHORT ("+6%", "-3%", ""). Verbose comparisons belong elsewhere.
+        SHORT ("+6 %", "-3 %", ""). Verbose comparisons belong elsewhere.
       - scope_options: 3–6 chips the user can click to re-scope. Each
         {label, value}. Example for an Apple earnings PDF:
-          [{label:"Q4 FY24", value:"q4_fy24"},
-           {label:"FY24",    value:"fy24"},
-           {label:"By segment", value:"by_segment"},
-           {label:"By region",  value:"by_region"}]
+          [{label:"T4 2024", value:"q4_fy24"},
+           {label:"Exercice 2024", value:"fy24"},
+           {label:"Par segment", value:"by_segment"},
+           {label:"Par région",  value:"by_region"}]
         Tailor the options to what THIS document actually supports.
       - scope_selected: the `value` of the currently active option.
     """
@@ -142,9 +146,10 @@ When you render, call `render_dashboard(...)` ONCE with structured data:
   - 4 KPIs, 6–12 trend points, 3–5 share slices, 5–8 rows.
   - `scope_options`: 3–6 chips tailored to THIS PDF. Examples of good
     chip sets:
-      - Apple Q4 PDF → [Q4 FY24, FY24, By segment, By region, By category]
-      - Tesla Q3 PDF → [Q3 '24, By model, By region, Automotive vs Energy,
-                       Trailing 4 quarters]
+      - Apple Q4 PDF → [T4 2024, Exercice 2024, Par segment, Par région,
+                       Par catégorie]
+      - Tesla Q3 PDF → [T3 2024, Par modèle, Par région, Automobile vs
+                       Énergie, 4 derniers trimestres]
   - `scope_selected`: which chip is active. Default to the most natural
     starting scope for the document. After a chip click, set this to the
     clicked value.
@@ -170,10 +175,11 @@ When the user (or a chip click) asks to change scope:
 ## Chat tone
 
 Be helpful, brief, conversational. After the first render, you can
-suggest one or two follow-ups the user might click ("Tap *FY24* for the
-full-year view" or "Want me to break it down by segment?"). Don't list
+suggest one or two follow-ups the user might click ("Touchez *Exercice 2024*
+pour la vue annuelle" or "Voulez-vous le détail par segment ?"). Don't list
 more than two suggestions.
 
+{FRENCH_OUTPUT_RULE}
 {CATALOG_PROMPT}
 """
 

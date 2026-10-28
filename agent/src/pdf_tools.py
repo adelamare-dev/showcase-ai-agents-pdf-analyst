@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, HumanMessage
 
+from src.locale import FRENCH_OUTPUT_RULE
 from src.models import EXTRACTOR_MODEL, chat_model
 
 # We keep the extractor model cheap; this is structured JSON work, not chat.
@@ -100,7 +101,8 @@ def extract_dashboard_data(pdf_text: str, document_name: str) -> str:
         "You are a careful data extractor. Read the PDF text and return ONLY "
         "a JSON object with the exact shape requested. No prose, no markdown "
         "fences. Use only numbers that appear in the document. "
-        "If exact values are unclear, use 'n/a' for KPI values."
+        "If exact values are unclear, use 'n/a' for KPI values.\n\n"
+        f"{FRENCH_OUTPUT_RULE}"
     )
     user = f"""\
 Document name: {document_name}
@@ -181,7 +183,8 @@ def query_pdf(question: str, runtime: ToolRuntime[Any]) -> str:
         "- 'trend' → [{label, value}, ...]        for time-series\n"
         "- 'share' → [{label, value}, ...]        for breakdowns / shares\n"
         "- 'table' → { columns:[{key,label}], rows:[{...}] }  for lists\n"
-        "- 'text'  → string                       for narrative answers\n"
+        "- 'text'  → string                       for narrative answers\n\n"
+        f"{FRENCH_OUTPUT_RULE}"
     )
     user = f"""Question: {question}
 

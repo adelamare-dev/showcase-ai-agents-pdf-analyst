@@ -53,6 +53,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from src.a2ui_validation import fallback_components, validate_components
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
+from src.locale import FRENCH_OUTPUT_RULE
 from src.models import RENDER_MODEL, agent_chat_model, chat_model
 from src.pdf_tools import query_pdf
 
@@ -85,11 +86,11 @@ _RENDER_MODEL = chat_model(RENDER_MODEL)
 # (a `type` key, nested component objects) and every attempt is rejected.
 RENDER_EXAMPLE = [
     {"id": "root", "component": "Stack", "children": ["title", "trend"]},
-    {"id": "title", "component": "Heading", "text": "Revenue by quarter"},
+    {"id": "title", "component": "Heading", "text": "Chiffre d'affaires par trimestre"},
     {
         "id": "trend",
         "component": "LineChart",
-        "data": [{"label": "Q1", "value": 41.2}, {"label": "Q2", "value": 43.0}],
+        "data": [{"label": "T1", "value": 41.2}, {"label": "T2", "value": 43.0}],
     },
 ]
 
@@ -126,6 +127,7 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
 
     prompt = (
         f"{context_text}\n{custom_catalog_note}\n"
+        f"{FRENCH_OUTPUT_RULE}\n"
         "Design the surface using ONLY components from the catalog above. "
         "Inline all data (use plain values, not {{path}} bindings, unless a "
         "property explicitly accepts a path). The user's request is in the "
@@ -207,8 +209,8 @@ Only if NO message in the history has ever contained a
 ## How a turn MUST go (do not deviate)
 
 1. If NO message in the conversation history has a `[Document: ...]`
-   header, reply with a single sentence: "Attach a PDF and I'll render
-   the answer." STOP. Do not call any tool.
+   header, reply with a single sentence: "Joignez un PDF et je
+   génère la réponse." STOP. Do not call any tool.
 2. Otherwise (a PDF is available from this turn or a previous one):
    a. ONE call to `query_pdf(question=<the user's question on THIS
       turn>)`. Pass only the question: the tool reads the document itself.
@@ -246,8 +248,8 @@ secondary LLM will honor it. Defaults per shape_hint:
                 Overline(topic),
                 Heading(title),
                 Text(intro paragraph, 2-4 sentences),
-                Callout(tone=info, title="Key idea", body=core insight),
-                Section(title="Why it matters", child=Card(Text(...))),
+                Callout(tone=info, title="Idée clé", body=core insight),
+                Section(title="Pourquoi c'est important", child=Card(Text(...))),
                 BulletList(items=[3 key points]),
               )
               Use Callout for the "headline takeaway", BulletList for
@@ -263,6 +265,7 @@ above. Skip charts unless the user explicitly asked for data viz.
 - After generate_a2ui returns, STOP IMMEDIATELY.
 - Never describe the surface in prose. The surface IS the answer.
 
+{FRENCH_OUTPUT_RULE}
 {CATALOG_PROMPT}
 """
 
