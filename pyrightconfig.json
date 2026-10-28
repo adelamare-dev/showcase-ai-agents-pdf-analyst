@@ -1,0 +1,5 @@
+{
+  "venvPath": "agent",
+  "venv": ".venv",
+  "executionEnvironments": [{ "root": "agent" }]
+}
