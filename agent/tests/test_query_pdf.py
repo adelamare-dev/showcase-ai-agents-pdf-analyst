@@ -1,8 +1,10 @@
 import json
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
 
 from src import pdf_tools
 from tests.fakes import ScriptedModel, fake_runtime
@@ -99,3 +101,23 @@ def test_no_document_returns_fallback_without_calling_the_extractor(monkeypatch)
 def test_latest_document_text_is_none_without_a_document():
     assert pdf_tools.latest_document_text([]) is None
     assert pdf_tools.latest_document_text([AIMessage(content=_doc("x"))]) is None
+
+
+def test_tool_node_injects_the_runtime_with_the_graph_state(monkeypatch):
+    stub = ScriptedModel([AIMessage(content=ANSWER)])
+    monkeypatch.setattr(pdf_tools, "_EXTRACTOR", stub)
+    graph = StateGraph(MessagesState)
+    graph.add_node("tools", ToolNode([pdf_tools.query_pdf]))
+    graph.add_edge(START, "tools")
+    graph.add_edge("tools", END)
+    call = AIMessage(
+        content="",
+        tool_calls=[{"name": "query_pdf", "args": {"question": "Q?"}, "id": "call1"}],
+    )
+    result = graph.compile().invoke(
+        {"messages": [HumanMessage(content=_doc("GRAPH-BODY")), call]}
+    )
+    tool_message = result["messages"][-1]
+    assert isinstance(tool_message, ToolMessage)
+    assert json.loads(str(tool_message.content))["shape_hint"] == "text"
+    assert "GRAPH-BODY" in _user_prompt(stub)
