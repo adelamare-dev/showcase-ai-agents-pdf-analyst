@@ -1,0 +1,101 @@
+import json
+
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.tools import StructuredTool
+from langchain_core.utils.function_calling import convert_to_openai_tool
+
+from src import pdf_tools
+from tests.fakes import ScriptedModel, fake_runtime
+
+ANSWER = '{"shape_hint":"text","title":"T","summary":"S","data":""}'
+
+
+def _doc(body: str, name: str = "report.pdf") -> str:
+    return f"[Document: {name}]\n{body}"
+
+
+def _query(monkeypatch, messages: list, question: str = "What is it?"):
+    stub = ScriptedModel([AIMessage(content=ANSWER)])
+    monkeypatch.setattr(pdf_tools, "_EXTRACTOR", stub)
+    tool = pdf_tools.query_pdf
+    assert isinstance(tool, StructuredTool) and tool.func is not None
+    result = tool.func(question=question, runtime=fake_runtime(messages))
+    return stub, result
+
+
+def _user_prompt(stub: ScriptedModel) -> str:
+    return stub.calls[0][1][1]
+
+
+def test_model_facing_args_are_the_question_only():
+    schema = convert_to_openai_tool(pdf_tools.query_pdf)
+    assert set(schema["function"]["parameters"]["properties"]) == {"question"}
+
+
+def test_extractor_receives_the_whole_document(monkeypatch):
+    body = "a" * 44_990 + "THE-END"
+    stub, _ = _query(monkeypatch, [HumanMessage(content=_doc(body))])
+    assert "THE-END" in _user_prompt(stub)
+    assert body in _user_prompt(stub)
+
+
+def test_most_recent_document_wins(monkeypatch):
+    messages = [
+        HumanMessage(content=_doc("OLD-BODY", "old.pdf")),
+        AIMessage(content="ok"),
+        HumanMessage(content=_doc("NEW-BODY", "new.pdf")),
+        AIMessage(content="ok"),
+        HumanMessage(content="a follow-up without a document"),
+    ]
+    stub, _ = _query(monkeypatch, messages)
+    assert "NEW-BODY" in _user_prompt(stub)
+    assert "OLD-BODY" not in _user_prompt(stub)
+
+
+def test_document_is_found_in_content_blocks(monkeypatch):
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": "Summarise this"},
+            {"type": "text", "text": _doc("BLOCK-BODY")},
+        ]
+    )
+    stub, _ = _query(monkeypatch, [message])
+    assert "BLOCK-BODY" in _user_prompt(stub)
+    assert "Summarise this" not in _user_prompt(stub).split("PDF text")[1]
+
+
+def test_document_given_as_plain_string_is_found(monkeypatch):
+    stub, _ = _query(monkeypatch, [HumanMessage(content=_doc("STRING-BODY"))])
+    assert "STRING-BODY" in _user_prompt(stub)
+
+
+def test_header_without_filename_is_recognised(monkeypatch):
+    message = HumanMessage(content="[Document attached]\nANON-BODY")
+    stub, _ = _query(monkeypatch, [message])
+    assert "ANON-BODY" in _user_prompt(stub)
+
+
+def test_several_documents_in_one_message_are_joined(monkeypatch):
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": _doc("FIRST-BODY", "a.pdf")},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA"}},
+            {"type": "text", "text": _doc("SECOND-BODY", "b.pdf")},
+        ]
+    )
+    assert pdf_tools.latest_document_text([message]) == (
+        f"{_doc('FIRST-BODY', 'a.pdf')}\n\n{_doc('SECOND-BODY', 'b.pdf')}"
+    )
+
+
+def test_no_document_returns_fallback_without_calling_the_extractor(monkeypatch):
+    stub, result = _query(monkeypatch, [HumanMessage(content="Hello")])
+    assert stub.calls == []
+    data = json.loads(result)
+    assert data["shape_hint"] == "text"
+    assert "no document" in data["summary"].lower()
+
+
+def test_latest_document_text_is_none_without_a_document():
+    assert pdf_tools.latest_document_text([]) is None
+    assert pdf_tools.latest_document_text([AIMessage(content=_doc("x"))]) is None

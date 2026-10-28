@@ -210,10 +210,10 @@ Only if NO message in the history has ever contained a
    header, reply with a single sentence: "Attach a PDF and I'll render
    the answer." STOP. Do not call any tool.
 2. Otherwise (a PDF is available from this turn or a previous one):
-   a. ONE call to `query_pdf(pdf_text=<the document text from the most
-      recent [Document: ...] message>, question=<the user's question on
-      THIS turn>)`. The tool returns JSON with shape_hint, title,
-      summary, data. Read it silently. DO NOT type the JSON anywhere.
+   a. ONE call to `query_pdf(question=<the user's question on THIS
+      turn>)`. Pass only the question: the tool reads the document itself.
+      It returns JSON with shape_hint, title, summary, data. Read it
+      silently. DO NOT type the JSON anywhere.
    b. ONE call to `generate_a2ui()`. No arguments.
    c. STOP. Do not call any more tools. Do not write any chat content.
       Your final assistant message MUST be an empty string. The rendered
@@ -227,7 +227,7 @@ Only if NO message in the history has ever contained a
 - NEVER include the query_pdf JSON in your reply.
 - NEVER include any tool's return value in your reply.
 - NEVER quote the PDF text, summarize the document, or echo any part of
-  `pdf_text` back into the chat.
+  the document back into the chat.
 - The chat reply MUST be either empty ("") or a single very short
   sentence (under 10 words). Empty is preferred.
 

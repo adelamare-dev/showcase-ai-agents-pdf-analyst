@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TypedDict
+from typing import Any, TypedDict
 
-from langchain.tools import tool
+from langchain.tools import ToolRuntime, tool
+from langchain_core.messages import AnyMessage, HumanMessage
 
 from src.models import EXTRACTOR_MODEL, chat_model
 
@@ -39,6 +40,40 @@ def _strip_to_json(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
+
+
+def _block_texts(content: Any) -> list[str]:
+    """Text of each block of a message `content` (a string or a list of blocks)."""
+    if isinstance(content, str):
+        return [content]
+    texts: list[str] = []
+    for block in content if isinstance(content, list) else []:
+        if isinstance(block, str):
+            texts.append(block)
+        elif isinstance(block, dict) and isinstance(block.get("text"), str):
+            texts.append(block["text"])
+    return texts
+
+
+def latest_document_text(messages: list[AnyMessage]) -> str | None:
+    """Text of the document attached to the most recent human message that has one.
+
+    The multimodal middleware writes each document as a text block starting with
+    a `[Document: <filename>]` (or `[Document attached]`) header; that header is
+    how a document is told apart from the user's own words. Several documents in
+    one message are joined with a blank line.
+    """
+    for message in reversed(messages):
+        if not isinstance(message, HumanMessage):
+            continue
+        documents = [
+            text
+            for text in _block_texts(message.content)
+            if text.startswith("[Document")
+        ]
+        if documents:
+            return "\n\n".join(documents)
+    return None
 
 
 @tool
@@ -116,15 +151,28 @@ Return ONLY the JSON object.
 
 
 @tool
-def query_pdf(pdf_text: str, question: str) -> str:
-    """Answer a user question about the PDF and return ONLY structured data
-    that the dynamic agent can then render as a UI surface.
+def query_pdf(question: str, runtime: ToolRuntime[Any]) -> str:
+    """Answer a user question about the attached PDF and return ONLY structured
+    data that the dynamic agent can then render as a UI surface.
+
+    Pass only the question. The tool reads the most recent attached document
+    itself, so never copy or paste the document text into the call.
 
     Returns a JSON object: { "shape_hint": "stat|trend|share|table|text",
                              "title": "...", "summary": "...",
                              "data": <shape-appropriate payload> }
     The shape_hint is advice. The agent makes the final layout decision.
     """
+    pdf_text = latest_document_text(runtime.state["messages"])
+    if pdf_text is None:
+        return json.dumps(
+            {
+                "shape_hint": "text",
+                "title": "No document",
+                "summary": "No document was found in the conversation. Ask the user to attach a PDF.",
+                "data": "",
+            }
+        )
     sys = (
         "You are an analyst answering a question about a PDF. Return ONLY a "
         "JSON object describing the answer as structured data. No prose, no "
@@ -135,12 +183,11 @@ def query_pdf(pdf_text: str, question: str) -> str:
         "- 'table' → { columns:[{key,label}], rows:[{...}] }  for lists\n"
         "- 'text'  → string                       for narrative answers\n"
     )
-    user = f"""\
-Question: {question}
+    user = f"""Question: {question}
 
-PDF text (truncated):
+PDF text:
 \"\"\"
-{pdf_text[:30000]}
+{pdf_text}
 \"\"\"
 
 Return JSON shaped like:
