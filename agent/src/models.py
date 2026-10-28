@@ -26,10 +26,22 @@ retried. A call that is going to fail should fail fast so the user is told,
 instead of watching a spinner behind silent retries. The timeout is 1.5 times
 the slowest call measured with `scripts/measure.py` (30.5 s, rendering on
 ministral-8b-2512, which timed out at 30 s), capped at 45 s.
+
+Two kinds of client exist. `chat_model` builds a plain `ChatMistralAI`, used by
+the render model and the extractor. `agent_chat_model` builds the client of the
+two agent graphs, which re-chunks streamed tool calls so the chat can show a
+step while the tool runs (see `_StreamingToolCallMistral`).
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from typing import Any
+
+from langchain_core.callbacks import AsyncCallbackManagerForLLMRun
+from langchain_core.messages import AIMessageChunk, BaseMessage
+from langchain_core.messages.tool import tool_call_chunk
+from langchain_core.outputs import ChatGenerationChunk
 from langchain_mistralai import ChatMistralAI
 
 AGENT_MODEL = "ministral-3b-2512"
@@ -43,6 +55,83 @@ MAX_RETRIES = 1
 def chat_model(model: str) -> ChatMistralAI:
     """Build a deterministic Mistral chat client with the shared limits."""
     return ChatMistralAI(
+        model_name=model,
+        temperature=0,
+        max_retries=MAX_RETRIES,
+        timeout=REQUEST_TIMEOUT_S,
+    )
+
+
+class _StreamingToolCallMistral(ChatMistralAI):
+    """`ChatMistralAI` that streams a tool call as start, args, end.
+
+    Mistral delivers a tool call whole, in a single streamed chunk that also
+    carries `finish_reason`. `ag_ui_langgraph` drops any chunk with a
+    finish_reason and, even without that, only emits the tool-call start on
+    the first chunk and the arguments on a later one. Nothing is streamed, so
+    the client receives the whole call only after the tool has finished and
+    the chat step appears too late.
+
+    Each such chunk is re-yielded as: a chunk with name, id and empty args
+    (call start), a chunk with the arguments only, an empty chunk (call end),
+    then the original chunk minus its tool calls, keeping `finish_reason` and
+    `usage_metadata`. Merged, the chunks give the same message as before.
+    """
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: AsyncCallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        async for gen in super()._astream(
+            messages, stop, run_manager=run_manager, **kwargs
+        ):
+            msg = gen.message
+            if not (
+                isinstance(msg, AIMessageChunk)
+                and any(c.get("name") for c in msg.tool_call_chunks)
+            ):
+                yield gen
+                continue
+            for call in msg.tool_call_chunks:
+                yield _chunk(
+                    tool_call_chunk(
+                        name=call.get("name"),
+                        args="",
+                        id=call.get("id"),
+                        index=call.get("index"),
+                    )
+                )
+                if call.get("args"):
+                    yield _chunk(
+                        tool_call_chunk(
+                            name=None,
+                            args=call["args"],
+                            id=None,
+                            index=call.get("index"),
+                        )
+                    )
+                yield _chunk()
+            rest = msg.model_copy(update={"tool_call_chunks": [], "tool_calls": []})
+            yield ChatGenerationChunk(message=rest, generation_info=gen.generation_info)
+
+
+def _chunk(*calls: Any) -> ChatGenerationChunk:
+    return ChatGenerationChunk(
+        message=AIMessageChunk(content="", tool_call_chunks=list(calls))
+    )
+
+
+def agent_chat_model(model: str = AGENT_MODEL) -> ChatMistralAI:
+    """Build the agent graphs' client: `chat_model` with tool calls re-chunked.
+
+    Use it for the model passed to `create_agent` only. The render model must
+    stay a plain `chat_model`: its inner tool call would otherwise stream to
+    the client as a tool call of its own.
+    """
+    return _StreamingToolCallMistral(
         model_name=model,
         temperature=0,
         max_retries=MAX_RETRIES,

@@ -53,7 +53,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from src.a2ui_validation import fallback_components, validate_components
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
-from src.models import AGENT_MODEL, RENDER_MODEL, chat_model
+from src.models import RENDER_MODEL, agent_chat_model, chat_model
 from src.pdf_tools import query_pdf
 
 
@@ -269,7 +269,7 @@ above. Skip charts unless the user explicitly asked for data viz.
 
 def build_dynamic_agent():
     return create_agent(
-        model=chat_model(AGENT_MODEL),
+        model=agent_chat_model(),
         tools=[query_pdf, generate_a2ui],
         middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
         system_prompt=SYSTEM_PROMPT,
