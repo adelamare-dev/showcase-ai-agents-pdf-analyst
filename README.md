@@ -80,7 +80,7 @@ a2ui-pdf-analyst/
 │   │   ├── PdfChatChrome.tsx        → truncation status bar + confidentiality note
 │   │   ├── ToolStep.tsx             → live chat step for each tool call
 │   │   ├── SampleBar.tsx            → "Essayer un exemple" + suggested questions
-│   │   ├── FilteredAssistantMessage.tsx → suppresses JSON-shaped agent replies
+│   │   ├── FilteredAssistantMessage.tsx → suppresses JSON-shaped agent replies, drops images
 │   │   ├── Split.tsx                → VS-Code-style resizable chat/canvas split
 │   │   ├── Providers.tsx            → <CopilotKit> + activity renderers
 │   │   └── Brand.tsx                → SiteNav + PageHeader
@@ -93,7 +93,7 @@ a2ui-pdf-analyst/
 │       ├── use-pdf-attachments.ts  → attachment handling, truncation note
 │       └── samples.ts              → sample catalogue and French suggested questions
 └── agent/                    → Python · LangChain · LangGraph · FastAPI · AG-UI
-    ├── main.py               → /fixed and /dynamic FastAPI endpoints
+    ├── main.py               → /fixed and /dynamic FastAPI endpoints (server-to-server only)
     ├── pyproject.toml
     ├── uv.lock
     ├── scripts/measure.py    → latency and token measurement
@@ -115,6 +115,8 @@ a2ui-pdf-analyst/
 **Text cap** — extraction is capped in the browser at `PDF_TEXT_MAX_CHARS` (60 000 characters, `src/lib/pdf.ts`), cut at a page boundary. When a document is truncated, the status bar shows "Document tronqué : pages 1 à N sur M" and the agent receives the same note. There is no second, server-side truncation: this is the single cap. A PDF with no extractable text (a scan) is refused with an error message. A confidentiality line under the composer reminds users that this is a free-tier demo.
 
 **Live steps** — each tool call renders as a one-line step in the chat (`src/components/ToolStep.tsx`, labels in `src/lib/agent-steps.ts`) showing the model that runs it. Mistral sends a whole tool call in a single chunk, which `ag-ui-langgraph` would drop; the agent model is therefore built by `agent_chat_model()` in `agent/src/models.py`, a stream adapter that splits the call into start, arguments and end so the step appears while the tool runs.
+
+**Local hardening** — the agent listens on `127.0.0.1` and refuses any request that carries an `Origin` header, so a web page open in your browser cannot run it and spend your Mistral quota; only the Next.js runtime, server to server, calls it. A Content-Security-Policy (`next.config.ts`) only lets the browser load images from the app itself, and chat replies are rendered without images, so a prompt-injected PDF cannot leak data through an image URL. pdf.js parses PDFs with `isEvalSupported: false`.
 
 **Language** — the agent answers and writes surface text in French; the rule lives in `agent/src/locale.py`. Numbers are shown fr-FR by `src/lib/format.ts`.
 
