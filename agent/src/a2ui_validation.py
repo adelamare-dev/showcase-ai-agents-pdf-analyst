@@ -79,6 +79,29 @@ def validate_components(components: object) -> list[str]:
     return errors
 
 
+_HEADING_LEVELS = frozenset({"1", "2", "3"})
+
+
+def normalize_heading_levels(components: list) -> None:
+    """Rewrite `Heading` levels in place to the values the client schema accepts.
+
+    Models often write `h1` or an integer instead of "1". A level that cannot be
+    mapped to "1", "2" or "3" is dropped: it is optional on the client.
+    """
+    for item in components:
+        if not (
+            isinstance(item, dict)
+            and item.get("component") == "Heading"
+            and "level" in item
+        ):
+            continue
+        level = str(item["level"]).removeprefix("h")
+        if level in _HEADING_LEVELS:
+            item["level"] = level
+        else:
+            del item["level"]
+
+
 _GENERIC_TITLE = "Réponse"
 _GENERIC_SUMMARY = (
     "Je n'ai pas pu mettre en forme cette réponse. Reformulez votre question "

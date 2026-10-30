@@ -50,7 +50,11 @@ from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool as lc_tool
 from langgraph.checkpoint.memory import MemorySaver
 
-from src.a2ui_validation import fallback_components, validate_components
+from src.a2ui_validation import (
+    fallback_components,
+    normalize_heading_levels,
+    validate_components,
+)
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
@@ -171,6 +175,9 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
     surface_id = args.get("surfaceId", "dynamic-surface")
     # Only one catalog exists; a model-supplied catalogId is ignored.
     components = args["components"]
+    # The renderer replaces a component whose props are invalid with a visible
+    # alert, and the model sometimes writes a Heading level as "h1".
+    normalize_heading_levels(components)
     data = args.get("data", {})
 
     ops = [

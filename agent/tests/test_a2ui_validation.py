@@ -4,6 +4,7 @@ from langchain_core.messages import ToolMessage
 from src.a2ui_validation import (
     CATALOG_COMPONENTS,
     fallback_components,
+    normalize_heading_levels,
     validate_components,
 )
 
@@ -53,6 +54,30 @@ def test_validate_components(components, expected):
 def test_duplicate_id_is_reported_as_duplicate():
     errors = validate_components([_text(), {"id": "root", "component": "Text"}])
     assert any("duplicate" in error.lower() for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("level", "expected"),
+    [("h2", "2"), (3, "3"), ("1", "1"), ("h1", "1"), ("big", None), ("h4", None)],
+)
+def test_normalize_heading_levels(level, expected):
+    components = [{"id": "t", "component": "Heading", "text": "x", "level": level}]
+    normalize_heading_levels(components)
+    if expected is None:
+        assert "level" not in components[0]
+    else:
+        assert components[0]["level"] == expected
+
+
+def test_normalize_heading_levels_leaves_other_components_alone():
+    components = [
+        {"id": "a", "component": "Text", "text": "x", "level": "h1"},
+        {"id": "b", "component": "Heading", "text": "x"},
+        "not a dict",
+    ]
+    normalize_heading_levels(components)
+    assert components[0]["level"] == "h1"
+    assert "level" not in components[1]
 
 
 def test_fallback_uses_only_catalog_components():

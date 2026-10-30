@@ -153,6 +153,15 @@ def test_render_model_exception_propagates_without_retry(monkeypatch):
     assert len(stub.calls) == 1
 
 
+def test_heading_level_written_as_h1_is_sent_as_1(monkeypatch):
+    call = _render_call()
+    call.tool_calls[0]["args"]["components"] = [
+        {"id": "root", "component": "Heading", "text": "Titre", "level": "h1"}
+    ]
+    _, ops = _run_scripted(monkeypatch, [call])
+    assert ops[1]["updateComponents"]["components"][0]["level"] == "1"
+
+
 def test_model_supplied_catalog_id_is_ignored(monkeypatch):
     call = _render_call()
     call.tool_calls[0]["args"]["catalogId"] = "https://example.invalid/other"
