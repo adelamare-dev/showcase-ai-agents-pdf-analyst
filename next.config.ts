@@ -16,6 +16,8 @@ const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // AGENTS.md is maintained by hand: `next dev` must not append its own rules.
+  agentRules: false,
   // Pin the root to this app: otherwise Turbopack picks the topmost lockfile
   // or pnpm-workspace.yaml it finds (e.g. a parent monorepo) and fails to
   // resolve this app's node_modules.
