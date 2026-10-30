@@ -162,6 +162,18 @@ def test_heading_level_written_as_h1_is_sent_as_1(monkeypatch):
     assert ops[1]["updateComponents"]["components"][0]["level"] == "1"
 
 
+def test_invalid_optional_choice_is_not_sent_to_the_client(monkeypatch):
+    # The client would replace the whole component with a visible alert.
+    call = _render_call()
+    call.tool_calls[0]["args"]["components"] = [
+        {"id": "root", "component": "Text", "text": "Sous-titre", "weight": 1}
+    ]
+    _, ops = _run_scripted(monkeypatch, [call])
+    assert ops[1]["updateComponents"]["components"] == [
+        {"id": "root", "component": "Text", "text": "Sous-titre"}
+    ]
+
+
 def test_model_supplied_catalog_id_is_ignored(monkeypatch):
     call = _render_call()
     call.tool_calls[0]["args"]["catalogId"] = "https://example.invalid/other"
@@ -208,3 +220,55 @@ def test_turn_ends_after_the_first_surface(monkeypatch):
     surfaces = [m for m in result["messages"] if isinstance(m, ToolMessage)]
     assert len(main_model.calls) == 1
     assert len(surfaces) == 1
+
+
+_FAILED = {
+    "shape_hint": "text",
+    "title": "Extraction impossible",
+    "summary": "Je n'ai pas réussi à extraire ces données du document.",
+    "data": "",
+    "failed": True,
+}
+
+
+def _history_with_document(result: dict) -> list:
+    history = _history()
+    history[0] = HumanMessage(
+        content=[
+            {"type": "text", "text": "Show revenue"},
+            {"type": "text", "text": "[Document: r.pdf] SECRET-BODY"},
+        ]
+    )
+    history[2] = ToolMessage(
+        content=json.dumps(result), tool_call_id="q1abcdefg", name="query_pdf"
+    )
+    return history
+
+
+def test_failed_extraction_skips_the_render_model(monkeypatch):
+    stub, ops = _run_scripted(
+        monkeypatch, [_render_call()], _history_with_document(_FAILED)
+    )
+    assert stub.calls == []
+    components = ops[1]["updateComponents"]["components"]
+    texts = {c["component"]: c["text"] for c in components if "text" in c}
+    assert texts["Heading"] == "Extraction impossible"
+    assert texts["Text"] == _FAILED["summary"]
+
+
+def test_render_model_sees_the_extraction_but_not_the_document(monkeypatch):
+    result = {"shape_hint": "text", "title": "CA", "summary": "S", "data": ""}
+    stub, _ = _run_scripted(
+        monkeypatch, [_render_call()], _history_with_document(result)
+    )
+    sent = stub.calls[0]
+    flat = str(sent)
+    assert "SECRET-BODY" not in flat
+    assert "Show revenue" in flat
+    assert '"title": "CA"' in flat
+    assert "LAST query_pdf result" in sent[0].content
+
+
+def test_system_prompt_no_longer_asks_for_an_empty_reply():
+    assert "empty string" not in dynamic_agent.SYSTEM_PROMPT
+    assert '""' not in dynamic_agent.SYSTEM_PROMPT

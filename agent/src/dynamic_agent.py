@@ -36,20 +36,28 @@ The generated components are validated structurally (`src/a2ui_validation.py`).
 An invalid or missing render call is retried once with the rejection reason in
 the system prompt; after two failures a plain text surface is built in Python
 without any model call.
+
+A turn on this graph has one valid course, which the code imposes instead of
+asking the model for it (`PdfTurnRoutingMiddleware`): `query_pdf`, then
+`generate_a2ui`. The render model never sees the document text, only the
+`query_pdf` results, so it cannot read values the extractor did not report.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 from copilotkit import CopilotKitMiddleware, a2ui
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.tools import ToolRuntime, tool
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AnyMessage, SystemMessage
 from langchain_core.tools import tool as lc_tool
 
 from src.a2ui_validation import (
+    drop_invalid_choices,
     fallback_components,
     normalize_heading_levels,
     validate_components,
@@ -59,7 +67,50 @@ from src.checkpoints import BoundedMemorySaver
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
 from src.models import AGENT_MODEL, RENDER_MODEL, agent_chat_model, chat_model
-from src.pdf_tools import query_pdf
+from src.pdf_tools import (
+    extraction_failed,
+    latest_document_text,
+    query_pdf,
+    query_pdf_call_ids_this_turn,
+    without_document_text,
+)
+
+# Adopts the state schema of the other middleware, as `MistralErrorMiddleware`
+# does, to stay in the same `middleware=[...]` list for the type checker.
+StateT = TypeVar("StateT", bound=AgentState)
+
+
+def _required_tool(messages: list[AnyMessage]) -> str:
+    """The `tool_choice` of the next model call: a tool's name, or "none"."""
+    if latest_document_text(messages) is None:
+        return "none"
+    if not query_pdf_call_ids_this_turn(messages):
+        return "query_pdf"
+    return "generate_a2ui"
+
+
+class PdfTurnRoutingMiddleware(AgentMiddleware[StateT]):
+    """Decide the tool of each model call instead of leaving it to the model.
+
+    A turn on this graph has a single valid course: `query_pdf`, then
+    `generate_a2ui`. The code imposes it instead of asking the model, which,
+    left to choose, sometimes answers with an empty message without calling a
+    tool or calls `query_pdf` in a loop, and a booby-trapped document could push
+    it there. Without a document no tool is allowed: the model still called both
+    and rendered a surface about nothing, when all it has to do is ask for a PDF.
+    """
+
+    def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        return handler(_routed(request))
+
+    async def awrap_model_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        return await handler(_routed(request))
+
+
+def _routed(request: Any) -> Any:
+    return request.override(tool_choice=_required_tool(request.state["messages"]))
 
 
 # No-op shim. The secondary LLM is forced to call this tool so its output
@@ -113,6 +164,20 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
     state.
     """
     messages = runtime.state["messages"][:-1]
+
+    def _fallback_surface() -> str:
+        surface_id = "dynamic-surface"
+        return a2ui.render(
+            operations=[
+                a2ui.create_surface(surface_id, catalog_id=CATALOG_ID),
+                a2ui.update_components(surface_id, fallback_components(messages)),
+            ]
+        )
+
+    # Nothing to render from: the extractor already gave up, and the render
+    # model would only invent the data.
+    if extraction_failed(messages):
+        return _fallback_surface()
     context_entries = runtime.state.get("copilotkit", {}).get("context", [])
     context_text = "\n\n".join(
         entry.get("value", "")
@@ -133,6 +198,9 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
         f"{context_text}\n{custom_catalog_note}\n"
         f"{FRENCH_OUTPUT_RULE}\n"
         "Design the surface using ONLY components from the catalog above. "
+        "Every number, label and fact on the surface comes from the LAST "
+        "query_pdf result in this conversation. Copy the values exactly and "
+        "never estimate, complete or invent one: a short series stays short. "
         "Inline all data (use plain values, not {{path}} bindings, unless a "
         "property explicitly accepts a path). The user's request is in the "
         "most recent messages. Honor the words they used (chart type, "
@@ -144,6 +212,7 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
         f"{json.dumps(RENDER_EXAMPLE)}"
     )
 
+    render_messages = without_document_text(messages)
     model_with_tool = _RENDER_MODEL.bind_tools([render_a2ui], tool_choice="render_a2ui")
 
     # At most two attempts: a malformed or missing render_a2ui call is retried
@@ -151,7 +220,9 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
     # not caught here; they propagate to the error middleware.
     args: dict = {}
     for attempt in range(2):
-        response = model_with_tool.invoke([SystemMessage(content=prompt), *messages])
+        response = model_with_tool.invoke(
+            [SystemMessage(content=prompt), *render_messages]
+        )
         if response.tool_calls:
             args = response.tool_calls[0]["args"]
             errors = validate_components(args.get("components", []))
@@ -164,13 +235,7 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
             f"{' '.join(errors)} Call render_a2ui again with a corrected surface."
         )
     else:
-        surface_id = "dynamic-surface"
-        return a2ui.render(
-            operations=[
-                a2ui.create_surface(surface_id, catalog_id=CATALOG_ID),
-                a2ui.update_components(surface_id, fallback_components(messages)),
-            ]
-        )
+        return _fallback_surface()
 
     surface_id = args.get("surfaceId", "dynamic-surface")
     # Only one catalog exists; a model-supplied catalogId is ignored.
@@ -178,6 +243,7 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
     # The renderer replaces a component whose props are invalid with a visible
     # alert, and the model sometimes writes a Heading level as "h1".
     normalize_heading_levels(components)
+    drop_invalid_choices(components)
     data = args.get("data", {})
 
     ops = [
@@ -224,21 +290,16 @@ Only if NO message in the history has ever contained a
       It returns JSON with shape_hint, title, summary, data. Read it
       silently. DO NOT type the JSON anywhere.
    b. ONE call to `generate_a2ui()`. No arguments.
-   c. STOP. Do not call any more tools. Do not write any chat content.
-      Your final assistant message MUST be an empty string. The rendered
-      surface IS the user-visible answer.
+   c. STOP. The rendered surface IS the user-visible answer.
 
 ## Absolute hard rules. Breaking ANY of these causes a crash.
 
 - After `generate_a2ui` returns, you are DONE for this turn. Do not call
-  `query_pdf` again. Do not call `generate_a2ui` again. Do not write
-  anything except an empty string.
+  `query_pdf` again. Do not call `generate_a2ui` again.
 - NEVER include the query_pdf JSON in your reply.
 - NEVER include any tool's return value in your reply.
 - NEVER quote the PDF text, summarize the document, or echo any part of
   the document back into the chat.
-- The chat reply MUST be either empty ("") or a single very short
-  sentence (under 10 words). Empty is preferred.
 
 ## Layout guidance for generate_a2ui
 
@@ -281,7 +342,11 @@ def build_dynamic_agent(agent_model: str = AGENT_MODEL):
     return create_agent(
         model=agent_chat_model(agent_model),
         tools=[query_pdf, generate_a2ui],
-        middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
+        middleware=[
+            CopilotKitMiddleware(),
+            PdfTurnRoutingMiddleware(),
+            MistralErrorMiddleware(),
+        ],
         system_prompt=SYSTEM_PROMPT,
         checkpointer=BoundedMemorySaver(),
     )

@@ -58,17 +58,22 @@ class ScriptedToolCaller(BaseChatModel):
     script: list[tuple[str, dict]]
     cycle: bool = False
     calls: list = Field(default_factory=list)
+    # The `tool_choice` the model was bound with for each call it answered.
+    forced: list = Field(default_factory=list)
+    _bound_choice: object = None
 
     @property
     def _llm_type(self) -> str:
         return "scripted-tool-caller"
 
     def bind_tools(self, tools, **kwargs):
+        self._bound_choice = kwargs.get("tool_choice")
         return self
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         index = len(self.calls)
         self.calls.append(messages)
+        self.forced.append(self._bound_choice)
         if self.cycle:
             index %= len(self.script)
         if index < len(self.script):
