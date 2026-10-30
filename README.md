@@ -110,13 +110,13 @@ a2ui-pdf-analyst/
 
 ## How it works
 
-**PDF attachment** — CopilotKit's multimodal attachment support lets the user attach a PDF directly in the chat input. The frontend extracts the text client-side via `pdfjs-dist` and inlines it into the user message under a `[Document: <filename>]` header. `multimodal_middleware.py` patches `ag-ui-langgraph` so this text block survives serialization and arrives intact at the model. The `query_pdf` tool itself reads the most recent `[Document: ...]` block from the graph state (the agent only checks that a document exists before calling it) — attach once, ask many questions.
+**PDF attachment** — CopilotKit's multimodal attachment support lets the user attach a PDF directly in the chat input. The frontend extracts the text client-side via `pdfjs-dist` and inlines it into the user message under a `[Document: <filename>]` header. Text items are regrouped by their position on the page (`pageTextFromItems`, `src/lib/pdf.ts`), one line per row with cells separated by ` | `, because a PDF can draw a table's header after its values; pages laid out in several columns and rotated pages keep the order of the PDF. `multimodal_middleware.py` patches `ag-ui-langgraph` so this text block survives serialization and arrives intact at the model. The `query_pdf` tool itself reads the most recent `[Document: ...]` block from the graph state (the agent only checks that a document exists before calling it) — attach once, ask many questions.
 
 **Text cap** — extraction is capped in the browser at `PDF_TEXT_MAX_CHARS` (60 000 characters, `src/lib/pdf.ts`), cut at a page boundary. When a document is truncated, the status bar shows "Document tronqué : pages 1 à N sur M" and the agent receives the same note. Reading also stops once the cap is passed, and after `PDF_MAX_PAGES` (1 000) pages, so a huge PDF cannot freeze the tab. The agent keeps a slightly higher per-document guard (`DOCUMENT_MAX_CHARS`, 61 000 characters, `agent/src/multimodal_middleware.py`) against a client that bypasses the browser; it never cuts a normal upload. A PDF with no extractable text (a scan) is refused with an error message. A confidentiality line under the composer reminds users that this is a free-tier demo.
 
 **Live steps** — each tool call renders as a one-line step in the chat (`src/components/ToolStep.tsx`, labels in `src/lib/agent-steps.ts`) showing the model that runs it. Mistral sends a whole tool call in a single chunk, which `ag-ui-langgraph` would drop; the agent model is therefore built by `agent_chat_model()` in `agent/src/models.py`, a stream adapter that splits the call into start, arguments and end so the step appears while the tool runs.
 
-**Local hardening** — the agent listens on `127.0.0.1` and refuses any request that carries an `Origin` header, so a web page open in your browser cannot run it and spend your Mistral quota; only the Next.js runtime, server to server, calls it. A Content-Security-Policy (`next.config.ts`) only lets the browser load images from the app itself, and chat replies are rendered without images, so a prompt-injected PDF cannot leak data through an image URL. pdf.js parses PDFs with `isEvalSupported: false`, and its worker is served by the app, so an upload contacts no third party. A turn is bounded too: tool calls run one at a time, `query_pdf` runs at most twice, and the agent keeps at most 32 conversations in memory.
+**Local hardening** — the agent listens on `127.0.0.1` and refuses any request that carries an `Origin` header, so a web page open in your browser cannot run it and spend your Mistral quota; only the Next.js runtime, server to server, calls it. A Content-Security-Policy (`next.config.ts`) only lets the browser load images from the app itself, and chat replies are rendered without images, so a prompt-injected PDF cannot leak data through an image URL. pdf.js parses PDFs with `isEvalSupported: false`, and its worker is served by the app, so an upload contacts no third party. A turn is bounded too: on `/dynamic` the code imposes its one valid course instead of asking the model (`PdfTurnRoutingMiddleware`, `agent/src/dynamic_agent.py`), so a document cannot talk the agent into looping, tool calls run one at a time, `query_pdf` runs at most twice even if the provider ignored that routing, and the agent keeps at most 32 conversations in memory.
 
 **Language** — the agent answers and writes surface text in French; the rule lives in `agent/src/locale.py`. Numbers are shown fr-FR by `src/lib/format.ts`.
 
@@ -124,13 +124,13 @@ a2ui-pdf-analyst/
 
 **Fixed schema (`/fixed`)** — `agent/src/a2ui/schemas/dashboard.json` is a static A2UI component tree the agent never touches. The `render_dashboard` tool takes typed arguments (KPIs, trend, share, rows, scope chips), packages them as A2UI `update_data_model` ops, and the existing tree picks them up via `{path}` bindings. One LLM pass, one tool call, surface streams in.
 
-**Dynamic schema (`/dynamic`)** — five steps per turn:
+**Dynamic schema (`/dynamic`)** — five steps per turn. Once a document is attached, each model call has its tool imposed by `tool_choice`; without one, no tool is allowed and the agent asks for a PDF.
 
 1. User attaches a PDF and asks a question. Frontend inlines the PDF text into the message.
-2. Agent calls `query_pdf(question)` → the tool reads the latest attached document from the graph state, and a sub-LLM returns structured JSON: `shape_hint`, `title`, `summary`, `data`.
-3. Agent calls `generate_a2ui` (no arguments; it re-reads the message history) → spawns a second sub-LLM bound to a no-op `render_a2ui` shim with `tool_choice` forced to that shim.
+2. Agent calls `query_pdf(question)` → the tool reads the latest attached document from the graph state, and a sub-LLM returns structured JSON: `shape_hint`, `title`, `summary`, `data`. If its answer is unusable, the surface says so instead of guessing.
+3. Agent calls `generate_a2ui` (no arguments; it re-reads the message history without the document text, so `query_pdf` is the only source of numbers) → spawns a second sub-LLM bound to a no-op `render_a2ui` shim with `tool_choice` forced to that shim.
 4. The second LLM's tool-call arguments (surfaceId, catalogId, components, data) become A2UI `create_surface` + `update_components` + `update_data_model` operations.
-5. The JS-side A2UI middleware detects `a2ui_operations` in the tool result and emits the snapshot events the canvas listens for. Surface renders. Agent emits an empty chat message.
+5. The JS-side A2UI middleware detects `a2ui_operations` in the tool result and emits the snapshot events the canvas listens for. Surface renders, and the turn ends there.
 
 ## Sample PDFs
 
@@ -185,4 +185,4 @@ Without `--dry-run`, `scripts/measure.py` makes real Mistral calls (at most 12 t
 | Frontend       | Next.js 16 · React 19 · Tailwind v4 · TypeScript · `@copilotkit/react-core/v2` · `@copilotkit/a2ui-renderer` · `pdfjs-dist` · Recharts |
 | Runtime bridge | `@copilotkit/runtime/v2` · `@ag-ui/client` (HttpAgent)                                                                                 |
 | Backend        | Python 3.12 · FastAPI · `ag-ui-langgraph` · `copilotkit` (Python SDK) · `langchain` agents + LangGraph · `langchain-mistralai`        |
-| Model          | Ministral 3 3B (`ministral-3b-2512`) for the main agents and `query_pdf`; Ministral 3 8B (`ministral-8b-2512`) for `generate_a2ui`     |
+| Model          | Ministral 3 3B (`ministral-3b-2512`) for the main agents; Ministral 3 8B (`ministral-8b-2512`) for `query_pdf` and `generate_a2ui`     |

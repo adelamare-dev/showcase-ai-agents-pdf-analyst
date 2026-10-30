@@ -9,9 +9,10 @@ Every live turn calls Mistral and consumes tokens: a run is limited to
 `MAX_TURNS` turns. Progress goes to stderr, the Markdown report to stdout.
 
 The PDF text is extracted with pypdf and cut at the cap read from
-`src/lib/pdf.ts`, with the same rule as the browser, so the agent receives the
-input it gets in production. pypdf and pdf.js do not extract identical text:
-the character counts are close, not equal.
+`src/lib/pdf.ts`, with the same rule as the browser. This measures size and
+latency, not answer quality: the browser rebuilds table rows from the positions
+pdf.js gives (`src/lib/pdf.ts`), pypdf does not, and a table header can even be
+missing from its text. The character counts are close, not equal.
 """
 
 from __future__ import annotations
