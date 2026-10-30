@@ -14,8 +14,8 @@ import uvicorn
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from copilotkit import LangGraphAGUIAgent
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -32,12 +32,20 @@ from src.fixed_agent import graph as fixed_graph  # noqa: E402
 
 app = FastAPI(title="A2UI Demo Agents")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# Only the Next.js runtime calls these endpoints, server to server, and it
+# sends no Origin header. Browsers always send one on a POST, including the
+# no-CORS requests that a CORS policy cannot stop: refusing it keeps any web
+# page open in the operator's browser from running the agents and spending
+# the Mistral quota.
+@app.middleware("http")
+async def reject_browser_requests(request: Request, call_next):
+    if "origin" in request.headers:
+        return JSONResponse(
+            {"detail": "Browser requests are not accepted."}, status_code=403
+        )
+    return await call_next(request)
+
 
 # LangGraph's default recursion_limit is 25. ag_ui_langgraph builds its own
 # RunnableConfig per run, which overrides any `.with_config()` we bind at
@@ -81,9 +89,9 @@ def root():
 
 
 def main():
+    # uvicorn's default host (127.0.0.1) keeps the agent off the network.
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
         port=int(os.environ.get("PORT", "8123")),
         reload=True,
     )
