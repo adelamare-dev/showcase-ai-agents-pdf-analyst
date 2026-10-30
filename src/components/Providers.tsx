@@ -21,8 +21,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
      * each mount / reload / HMR reconnect. single-route mode only serves the
      * POST envelope, so those calls are structural 404s, re-logged as a burst
      * on every page load (see SETUP/2026-10-27-orchestration-loop/AUDIT.md). */
+    /* useSingleEndpoint: the default "auto" transport probes GET {runtimeUrl}/info
+     * first, which a single-route runtime answers with a 404 (one console error
+     * per page load) before falling back to the POST envelope. The route is
+     * single-route only, so say so and skip the probe. */
     <CopilotKit
       runtimeUrl="/api/copilotkit"
+      useSingleEndpoint
       renderActivityMessages={RENDERERS}
       enableInspector={false}
     >
