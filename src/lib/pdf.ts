@@ -2,6 +2,11 @@
  *  page boundary so the model never receives half a page. */
 export const PDF_TEXT_MAX_CHARS = 60_000;
 
+/** Pages read at most. A PDF without a text layer (a scan) never raises the
+ *  running character total, so the text cap cannot stop the read: only this
+ *  limit keeps a document of thousands of pages from freezing the tab. */
+export const PDF_MAX_PAGES = 1_000;
+
 export type LoadedPdf = {
   filename: string;
   pages: number;
@@ -19,23 +24,81 @@ export async function extractPdfText(file: File): Promise<{
   const buf = await file.arrayBuffer();
   // @ts-expect-error pdfjs ships its own types via a custom export
   const pdfjs = await import("pdfjs-dist/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
   // The PDF is untrusted: never let pdf.js compile code from it.
-  const doc = await pdfjs.getDocument({ data: buf, isEvalSupported: false })
-    .promise;
+  const task = pdfjs.getDocument({ data: buf, isEvalSupported: false });
+  return readThenDestroy(task, async (doc: PageSource) => {
+    const pageTexts = await collectPageTexts(
+      doc,
+      PDF_TEXT_MAX_CHARS,
+      PDF_MAX_PAGES,
+    );
+    return { pageTexts, pages: doc.numPages };
+  });
+}
+
+/** Runs `read` on the document a pdf.js loading task produces, then destroys
+ *  the task. Each task owns a worker that only `task.destroy()` ends, and it
+ *  also destroys the document. The task is destroyed even when loading
+ *  rejects (corrupt or password-protected PDF), and a failing `destroy` never
+ *  replaces the error that came first. */
+export async function readThenDestroy<D, T>(
+  task: { promise: Promise<D>; destroy(): Promise<void> },
+  read: (doc: D) => Promise<T>,
+): Promise<T> {
+  try {
+    return await read(await task.promise);
+  } finally {
+    await task.destroy().catch(() => {});
+  }
+}
+
+/** The part of a pdf.js document that page reading needs. */
+type PageSource = {
+  numPages: number;
+  getPage(p: number): Promise<{
+    getTextContent(): Promise<{ items: Array<{ str?: string }> }>;
+  }>;
+};
+
+/** Reads page texts in order and stops as soon as the running total (pages
+ *  joined with "\n", as `capPages` does) exceeds `maxChars`, or after
+ *  `maxPages` pages. The page that crosses the cap is kept so `capPages` can
+ *  tell the text was cut. */
+export async function collectPageTexts(
+  doc: PageSource,
+  maxChars: number,
+  maxPages: number,
+): Promise<string[]> {
   const pageTexts: string[] = [];
-  for (let p = 1; p <= doc.numPages; p++) {
+  const last = Math.min(doc.numPages, maxPages);
+  let total = 0;
+  for (let p = 1; p <= last; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
-    pageTexts.push(
-      content.items
-        .map((it: { str?: string }) => it.str ?? "")
-        .filter(Boolean)
-        .join(" "),
-    );
+    const text = content.items
+      .map((it) => it.str ?? "")
+      .filter(Boolean)
+      .join(" ");
+    pageTexts.push(text);
+    total += (p === 1 ? 0 : 1) + text.length;
+    if (total > maxChars) break;
   }
-  return { pageTexts, pages: doc.numPages };
+  return pageTexts;
+}
+
+/** True when the document is only partly represented: either `capPages` cut
+ *  the text, or reading stopped before the last page (page limit) while the
+ *  text that was read still fit. */
+export function isPartialRead(
+  capTruncated: boolean,
+  readPages: number,
+  totalPages: number,
+): boolean {
+  return capTruncated || readPages < totalPages;
 }
 
 /** Joins pages with "\n" and keeps whole pages while the total stays within
@@ -81,13 +144,12 @@ export async function preparePdf(
   file: File,
 ): Promise<{ value: string; loaded: LoadedPdf }> {
   const { pageTexts, pages } = await extractPdfText(file);
-  const { text, keptPages, truncated } = capPages(
-    pageTexts,
-    PDF_TEXT_MAX_CHARS,
-  );
+  const capped = capPages(pageTexts, PDF_TEXT_MAX_CHARS);
+  const { text, keptPages } = capped;
   if (text.trim() === "") {
     throw new NoTextError();
   }
+  const truncated = isPartialRead(capped.truncated, pageTexts.length, pages);
   const value = truncated
     ? `[${truncationNote(keptPages, pages)}]\n${text}`
     : text;

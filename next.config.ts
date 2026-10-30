@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 // make the model emit an image whose URL carries data to a third party. The
 // browser therefore loads images and media from this origin only. Scripts,
 // styles, fetches and workers are left unrestricted: `next dev` needs eval and
-// its HMR websocket, and the pdf.js worker comes from a CDN.
+// its HMR websocket, and the pdf.js worker is bundled as a local asset.
 const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob:",
   "media-src 'self'",
