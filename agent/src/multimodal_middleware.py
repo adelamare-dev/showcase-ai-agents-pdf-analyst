@@ -47,6 +47,15 @@ _TEXT_MIME_PREFIXES = (
     "application/x-yaml",
 )
 
+# Server-side ceiling on one document, a little above the browser's own cap
+# (`PDF_TEXT_MAX_CHARS` in `src/lib/pdf.ts`, 60 000) so that no legitimate
+# upload, truncation note included, is ever cut again here. It only guards
+# against a client that skips the browser and sends an arbitrarily large body:
+# the inlined document stays in the history and goes back to the model on
+# every call of the turn.
+DOCUMENT_MAX_CHARS = 61_000
+_TRUNCATION_NOTE = "[Document tronqué : limite du serveur atteinte]"
+
 _INSTALLED = False
 
 
@@ -86,7 +95,10 @@ def _patched(content: List[Any]) -> List[dict]:
             except AttributeError:
                 filename = None
         header = f"[Document: {filename}]\n" if filename else "[Document attached]\n"
-        out.append({"type": "text", "text": header + item.source.value})
+        body = item.source.value
+        if len(body) > DOCUMENT_MAX_CHARS:
+            body = f"{_TRUNCATION_NOTE}\n{body[:DOCUMENT_MAX_CHARS]}"
+        out.append({"type": "text", "text": header + body})
 
     _flush_passthrough()
     return out
