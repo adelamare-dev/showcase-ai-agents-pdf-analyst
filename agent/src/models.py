@@ -7,13 +7,17 @@ Model IDs are dated snapshots, never a `-latest` alias: an alias can move to a
 new model under our feet and change tool-calling behaviour without any code
 change on our side.
 
-The demo runs on Mistral's free tier, so each role uses the cheapest dated
+The demo runs on Mistral's free tier, so a role starts on the cheapest dated
 model that supports function calling: Ministral 3 3B (`ministral-3b-2512`,
 $0.10/M tokens in and out, 1.3M tokens/min on the free tier). If a role proves
 unreliable in a live run, escalate only that role one step: `ministral-8b-2512`
 ($0.15/M), then `ministral-14b-2512` ($0.20/M). `mistral-small-2603` and
 `mistral-large-2512` are not usable on this account (0 requests/min, respectively
 not in the plan).
+
+The extractor role has been escalated once: on 3B, only 1 call in 4 read the
+columns of a table correctly (shifted values, invented labels, decimal commas
+outside JSON strings), against 4 in 4 on 8B, with the same text and prompt.
 
 The render role has been escalated once: on 3B, follow-up questions came back
 as nested component trees that failed validation twice in a row, so the user
@@ -45,7 +49,7 @@ from langchain_core.outputs import ChatGenerationChunk
 from langchain_mistralai import ChatMistralAI
 
 AGENT_MODEL = "ministral-3b-2512"
-EXTRACTOR_MODEL = "ministral-3b-2512"
+EXTRACTOR_MODEL = "ministral-8b-2512"
 RENDER_MODEL = "ministral-8b-2512"
 
 REQUEST_TIMEOUT_S = 45
@@ -54,20 +58,25 @@ MAX_RETRIES = 1
 # LangGraph supersteps allowed per turn. Measured on the real dynamic graph
 # (middlewares included) with scripted models: 11 for a normal turn (one
 # `query_pdf` then `generate_a2ui`), 15 with two `query_pdf`, 19 with three, 23
-# with four; each extra model-and-tool round costs 4 supersteps. A live run on
-# an ordinary question made the model call `query_pdf` three times (its
-# extractor had failed on invalid JSON), which is 19 of a former limit of 20:
-# one more refusal would have cut the stream mid-turn with no message for the
-# user. 24 is the 23 of the four-call turn plus one step of slack. A `/fixed`
+# with four; each extra model-and-tool round costs 4 supersteps. The routing of
+# the dynamic graph keeps a turn at 11. The margin only matters if the provider
+# ignores `tool_choice`: 24 is the 23 of the four-call turn plus one step of
+# slack, past which the stream is cut with no message for the user. A `/fixed`
 # turn needs 10. Raise it only with a new measurement (see
 # tests/test_turn_limits.py).
 AGENT_RECURSION_LIMIT = 24
 
 
-def chat_model(model: str) -> ChatMistralAI:
-    """Build a deterministic Mistral chat client with the shared limits."""
+def chat_model(model: str, *, disable_streaming: bool = False) -> ChatMistralAI:
+    """Build a deterministic Mistral chat client with the shared limits.
+
+    `disable_streaming` keeps the client from streaming even when it runs under
+    `astream_events`, so that a model called inside a tool does not relay its
+    text to the chat.
+    """
     return ChatMistralAI(
         model_name=model,
+        disable_streaming=disable_streaming,
         temperature=0,
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,

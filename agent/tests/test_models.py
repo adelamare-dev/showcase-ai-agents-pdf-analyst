@@ -1,8 +1,10 @@
 import asyncio
 import contextlib
 import json
+from typing import Any
 
 import httpx
+from langchain_core.runnables import RunnableLambda
 from langchain_core.tools import tool
 from langchain_mistralai import ChatMistralAI
 
@@ -33,7 +35,7 @@ def test_agent_model_is_ministral_3b():
 
 def test_call_sites_use_expected_models():
     assert dynamic_agent._RENDER_MODEL.model == "ministral-8b-2512"
-    assert pdf_tools._EXTRACTOR.model == "ministral-3b-2512"
+    assert pdf_tools._EXTRACTOR.model == "ministral-8b-2512"
 
 
 def test_no_latest_alias():
@@ -111,3 +113,82 @@ def test_plain_chat_model_leaves_parallel_tool_calls_alone():
     model.invoke("ping")
 
     assert "parallel_tool_calls" not in bodies[0]
+
+
+def test_extractor_is_not_streamed():
+    assert EXTRACTOR_MODEL == "ministral-8b-2512"
+    assert pdf_tools._EXTRACTOR.disable_streaming is True
+    assert chat_model(RENDER_MODEL).disable_streaming is False
+
+
+def _streaming_model(disable_streaming: bool) -> ChatMistralAI:
+    """A real model on a mock transport that answers both plain and SSE requests."""
+    completion = {
+        "id": "cmpl-1",
+        "object": "chat.completion",
+        "created": 0,
+        "model": EXTRACTOR_MODEL,
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {"role": "assistant", "content": "pong"},
+            }
+        ],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
+    chunk = {
+        **completion,
+        "object": "chat.completion.chunk",
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": "stop",
+                "delta": {"role": "assistant", "content": "pong"},
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if json.loads(request.content).get("stream"):
+            body = f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n"
+            return httpx.Response(
+                200, content=body, headers={"content-type": "text/event-stream"}
+            )
+        return httpx.Response(200, json=completion)
+
+    model = chat_model(EXTRACTOR_MODEL, disable_streaming=disable_streaming)
+    model.client = httpx.Client(
+        base_url="https://api.mistral.ai/v1", transport=httpx.MockTransport(handler)
+    )
+    model.async_client = httpx.AsyncClient(
+        base_url="https://api.mistral.ai/v1", transport=httpx.MockTransport(handler)
+    )
+    return model
+
+
+def _stream_events_of_a_nested_invoke(model: ChatMistralAI) -> tuple[int, str]:
+    """Count `on_chat_model_stream` events when a tool-like function calls `invoke`."""
+    inner = RunnableLambda(lambda _: model.invoke("ping").text)
+
+    async def play() -> tuple[int, str]:
+        count, output = 0, ""
+        async for raw_event in inner.astream_events("go", version="v2"):
+            event: Any = raw_event
+            if event["event"] == "on_chat_model_stream":
+                count += 1
+            if event["event"] == "on_chain_end" and not event["parent_ids"]:
+                output = event["data"]["output"]
+        return count, output
+
+    return asyncio.run(play())
+
+
+def test_invoke_inside_a_tool_streams_nothing_when_streaming_is_disabled():
+    count, output = _stream_events_of_a_nested_invoke(_streaming_model(True))
+    assert (count, output) == (0, "pong")
+
+
+def test_invoke_inside_a_tool_leaks_stream_events_without_the_setting():
+    count, _ = _stream_events_of_a_nested_invoke(_streaming_model(False))
+    assert count >= 1

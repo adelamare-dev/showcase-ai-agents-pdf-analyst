@@ -7,17 +7,56 @@ import re
 from typing import Any, TypedDict
 
 from langchain.tools import ToolRuntime, tool
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 
 from src.locale import FRENCH_OUTPUT_RULE
 from src.models import EXTRACTOR_MODEL, chat_model
 
-# We keep the extractor model cheap; this is structured JSON work, not chat.
-_EXTRACTOR = chat_model(EXTRACTOR_MODEL)
+# Not streamed: with streaming on, the raw JSON the extractor writes would be
+# relayed to the chat as assistant text while it is being produced.
+_EXTRACTOR = chat_model(EXTRACTOR_MODEL, disable_streaming=True)
 
 # Every `query_pdf` call sends the whole document to the extractor. A crafted
 # document can tell the agent to keep calling it, so a turn is capped.
 MAX_QUERY_PDF_CALLS_PER_TURN = 2
+
+DOCUMENT_OMITTED = (
+    "[Attached document omitted here: its content is in the query_pdf results.]"
+)
+
+# Returned (and shown to the user as is) when the extractor's answer is unusable.
+# Another attempt at temperature 0 would give the same output, so there is none.
+_EXTRACTION_FAILED = {
+    "shape_hint": "text",
+    "title": "Extraction impossible",
+    "summary": (
+        "Je n'ai pas réussi à extraire ces données du document. "
+        "Reformulez la question ou réessayez."
+    ),
+    "data": "",
+    "failed": True,
+}
+
+_EXTRACTION_RULES = """\
+## Reading the document
+
+The text was extracted from a PDF. Each line is one row of the page and " | "
+separates the cells of a row.
+- Prefer a table to a chart. A table is a header row followed by rows of cells:
+  the Nth value of a row belongs to the Nth cell of the header above it.
+- Copy each label exactly as it is written in that header. Never rename,
+  renumber or complete a period.
+- Report only the columns the question asks for.
+- Lines of evenly spaced numbers (1,0 then 0,8 then 0,6...) and lines of many
+  periods (T1-22 T2-22 T3-22...) are chart axes, not data: never report them.
+- Report only values written in the document. Never estimate or fill a gap.
+
+## JSON rules
+
+Keep the JSON keys exactly as shown, in English. `data` is exactly the payload
+of the chosen shape, with no wrapper object. A JSON number uses a dot and
+nothing else: write 0.4, never 0,4. French formatting applies to strings only.
+"""
 
 
 class Kpi(TypedDict):
@@ -45,6 +84,40 @@ def _strip_to_json(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
+
+
+# Even when told not to, the extractor writes numbers the French way, with the
+# right values: `"value": 2,8`. After a colon that is never valid JSON, so it is
+# safe to repair. Left alone: strings (matched first, to be skipped), lists,
+# where `2,8` is two valid numbers, and three digits after the comma, which can
+# be a thousands separator (94,930): a failure is better than a wrong number.
+_DECIMAL_COMMA = re.compile(
+    r'"(?:[^"\\]|\\.)*"|(:\s*-?\d+),(\d{1,2}|\d{4,})(?=\s*[,}\]])'
+)
+
+
+def _repair_decimal_commas(raw: str) -> str:
+    return _DECIMAL_COMMA.sub(
+        lambda match: f"{match[1]}.{match[2]}" if match[1] else match[0], raw
+    )
+
+
+def _extraction_json(raw: str) -> str | None:
+    """`raw` as the text of a JSON object, repaired if needed, or None if unusable.
+
+    On narrative answers the extractor also writes real line breaks inside
+    strings, which `strict=False` accepts. A repaired answer is written back as
+    standard JSON because the readers of the tool result parse it strictly.
+    """
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            parsed = json.loads(_repair_decimal_commas(raw), strict=False)
+        except json.JSONDecodeError:
+            return None
+        raw = json.dumps(parsed, ensure_ascii=False)
+    return raw if isinstance(parsed, dict) else None
 
 
 def _block_texts(content: Any) -> list[str]:
@@ -81,7 +154,7 @@ def latest_document_text(messages: list[AnyMessage]) -> str | None:
     return None
 
 
-def _query_pdf_call_ids_this_turn(messages: list[AnyMessage]) -> list[str]:
+def query_pdf_call_ids_this_turn(messages: list[AnyMessage]) -> list[str]:
     """IDs of the `query_pdf` calls made since the last human message, in order."""
     start = 0
     for index, message in enumerate(messages):
@@ -94,6 +167,53 @@ def _query_pdf_call_ids_this_turn(messages: list[AnyMessage]) -> list[str]:
         for call in message.tool_calls
         if call["name"] == "query_pdf" and call["id"]
     ]
+
+
+def without_document_text(messages: list[AnyMessage]) -> list[AnyMessage]:
+    """Copy of `messages` with every attached document replaced by a placeholder.
+
+    The render model gets the `query_pdf` results; the full text would only
+    tempt it to read values the extractor did not report. The state is not
+    modified.
+    """
+    out: list[AnyMessage] = []
+    for message in messages:
+        if not isinstance(message, HumanMessage):
+            out.append(message)
+        elif isinstance(message.content, str):
+            content = message.content
+            out.append(
+                message.model_copy(update={"content": DOCUMENT_OMITTED})
+                if content.startswith("[Document")
+                else message
+            )
+        else:
+            blocks = [_omit_document(block) for block in message.content]
+            out.append(message.model_copy(update={"content": blocks}))
+    return out
+
+
+def _omit_document(block: Any) -> Any:
+    """A content block, with its text swapped for the placeholder if it is a document."""
+    if isinstance(block, str):
+        return DOCUMENT_OMITTED if block.startswith("[Document") else block
+    if isinstance(block, dict):
+        text = block.get("text")
+        if isinstance(text, str) and text.startswith("[Document"):
+            return {**block, "text": DOCUMENT_OMITTED}
+    return block
+
+
+def extraction_failed(messages: list[AnyMessage]) -> bool:
+    """Whether the latest `query_pdf` result reports a failed extraction."""
+    for message in reversed(messages):
+        if isinstance(message, ToolMessage) and message.name == "query_pdf":
+            try:
+                payload = json.loads(message.text)
+            except json.JSONDecodeError:
+                return False
+            return isinstance(payload, dict) and payload.get("failed") is True
+    return False
 
 
 @tool
@@ -194,7 +314,7 @@ def query_pdf(question: str, runtime: ToolRuntime[Any]) -> str:
                 "data": "",
             }
         )
-    over_limit = _query_pdf_call_ids_this_turn(runtime.state["messages"])[
+    over_limit = query_pdf_call_ids_this_turn(runtime.state["messages"])[
         MAX_QUERY_PDF_CALLS_PER_TURN:
     ]
     if runtime.tool_call_id in over_limit:
@@ -218,7 +338,8 @@ def query_pdf(question: str, runtime: ToolRuntime[Any]) -> str:
         "- 'share' → [{label, value}, ...]        for breakdowns / shares\n"
         "- 'table' → { columns:[{key,label}], rows:[{...}] }  for lists\n"
         "- 'text'  → string                       for narrative answers\n\n"
-        f"{FRENCH_OUTPUT_RULE}"
+        f"{FRENCH_OUTPUT_RULE}\n\n"
+        f"{_EXTRACTION_RULES}"
     )
     user = f"""Question: {question}
 
@@ -239,15 +360,4 @@ Return JSON shaped like:
     raw = _strip_to_json(
         out.content if isinstance(out.content, str) else str(out.content)
     )
-    try:
-        json.loads(raw)  # validate
-        return raw
-    except json.JSONDecodeError:
-        return json.dumps(
-            {
-                "shape_hint": "text",
-                "title": "Answer",
-                "summary": "Could not produce structured output.",
-                "data": "",
-            }
-        )
+    return _extraction_json(raw) or json.dumps(_EXTRACTION_FAILED)

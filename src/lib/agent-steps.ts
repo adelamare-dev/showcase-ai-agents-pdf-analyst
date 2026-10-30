@@ -11,7 +11,7 @@ export const TOOL_STEPS = {
     running: "Lecture du document…",
     done: "Document lu",
     failed: "Lecture du document interrompue",
-    model: "Ministral 3B",
+    model: "Ministral 8B",
   },
   generate_a2ui: {
     running: "Conception de l'interface…",
