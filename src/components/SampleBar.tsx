@@ -25,7 +25,10 @@ export function SampleBar({
   current: LoadedPdf | null;
   onLoaded: (pdf: LoadedPdf) => void;
 }) {
-  const { agent } = useAgent({ agentId });
+  // Until the runtime connection is up, `agent` is a placeholder private to this
+  // component: a message sent on it runs, but the chat never shows it. Hence the
+  // `isReady` guard on the suggestions.
+  const { agent, isReady } = useAgent({ agentId });
   const { copilotkit } = useCopilotKit();
   const [doc, setDoc] = useState<Doc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +53,7 @@ export function SampleBar({
   }
 
   async function ask(question: string) {
-    if (!doc || busy) return;
+    if (!doc || busy || !isReady) return;
     const { value, loaded } = doc;
     agent.addMessage({
       id: crypto.randomUUID(),
@@ -107,7 +110,7 @@ export function SampleBar({
               key={q}
               type="button"
               className={BUTTON}
-              disabled={busy}
+              disabled={busy || !isReady}
               onClick={() => void ask(q)}
             >
               {q}
