@@ -48,7 +48,6 @@ from langchain.agents import create_agent
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool as lc_tool
-from langgraph.checkpoint.memory import MemorySaver
 
 from src.a2ui_validation import (
     fallback_components,
@@ -56,6 +55,7 @@ from src.a2ui_validation import (
     validate_components,
 )
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
+from src.checkpoints import BoundedMemorySaver
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
 from src.models import AGENT_MODEL, RENDER_MODEL, agent_chat_model, chat_model
@@ -283,7 +283,7 @@ def build_dynamic_agent(agent_model: str = AGENT_MODEL):
         tools=[query_pdf, generate_a2ui],
         middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
         system_prompt=SYSTEM_PROMPT,
-        checkpointer=MemorySaver(),
+        checkpointer=BoundedMemorySaver(),
     )
 
 

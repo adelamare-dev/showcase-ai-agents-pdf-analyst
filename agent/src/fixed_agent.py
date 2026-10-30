@@ -17,9 +17,9 @@ from typing import TypedDict
 from copilotkit import CopilotKitMiddleware, a2ui
 from langchain.agents import create_agent
 from langchain.tools import tool
-from langgraph.checkpoint.memory import MemorySaver
 
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
+from src.checkpoints import BoundedMemorySaver
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
 from src.models import AGENT_MODEL, agent_chat_model
@@ -198,7 +198,7 @@ def build_fixed_agent(agent_model: str = AGENT_MODEL):
         # after it so it sits closest to the model call.
         middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
         system_prompt=SYSTEM_PROMPT,
-        checkpointer=MemorySaver(),
+        checkpointer=BoundedMemorySaver(),
     )
 
 
