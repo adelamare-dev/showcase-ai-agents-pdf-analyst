@@ -1,6 +1,6 @@
 {
   "name": "a2ui-pdf-analyst",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "PDF Analyst (Showcase) - Multi-agent orchestration",
   "author": {
@@ -39,7 +39,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "concurrently": "^9.2.1",
+    "concurrently": "^9.2.5",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
