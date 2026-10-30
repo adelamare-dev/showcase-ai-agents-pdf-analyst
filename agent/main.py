@@ -29,6 +29,7 @@ _install_doc_inlining()
 
 from src.dynamic_agent import graph as dynamic_graph  # noqa: E402
 from src.fixed_agent import graph as fixed_graph  # noqa: E402
+from src.models import AGENT_RECURSION_LIMIT  # noqa: E402
 
 app = FastAPI(title="A2UI Demo Agents")
 
@@ -50,9 +51,9 @@ async def reject_browser_requests(request: Request, call_next):
 # LangGraph's default recursion_limit is 25. ag_ui_langgraph builds its own
 # RunnableConfig per run, which overrides any `.with_config()` we bind at
 # compile time on the graph. Pass recursion_limit here so it's honored.
-# 50 is plenty for our two-tool flow; bump higher only if a deeper agent
-# loop is genuinely needed.
-_AGENT_CONFIG = {"recursion_limit": 50}
+# The value is measured (see AGENT_RECURSION_LIMIT): just above the longest
+# legitimate turn, so a looping model is cut short instead of running on.
+_AGENT_CONFIG = {"recursion_limit": AGENT_RECURSION_LIMIT}
 
 add_langgraph_fastapi_endpoint(
     app=app,

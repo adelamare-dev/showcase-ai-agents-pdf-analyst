@@ -283,12 +283,14 @@ def build_graphs(models: dict[str, str]) -> dict[str, Any]:
 async def run_turn(graph: Any, message: HumanMessage, timer: CallTimer) -> Any:
     # Outside AG-UI nobody fills the `copilotkit` state key that the CopilotKit
     # middleware reads, so it is supplied empty.
+    from src.models import AGENT_RECURSION_LIMIT
+
     return await graph.ainvoke(
         {"messages": [message], "copilotkit": {"actions": [], "context": []}},
         config={
             "callbacks": [timer],
             "configurable": {"thread_id": str(uuid.uuid4())},
-            "recursion_limit": 50,
+            "recursion_limit": AGENT_RECURSION_LIMIT,
         },
     )
 

@@ -7,13 +7,17 @@ import re
 from typing import Any, TypedDict
 
 from langchain.tools import ToolRuntime, tool
-from langchain_core.messages import AnyMessage, HumanMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 
 from src.locale import FRENCH_OUTPUT_RULE
 from src.models import EXTRACTOR_MODEL, chat_model
 
 # We keep the extractor model cheap; this is structured JSON work, not chat.
 _EXTRACTOR = chat_model(EXTRACTOR_MODEL)
+
+# Every `query_pdf` call sends the whole document to the extractor. A crafted
+# document can tell the agent to keep calling it, so a turn is capped.
+MAX_QUERY_PDF_CALLS_PER_TURN = 2
 
 
 class Kpi(TypedDict):
@@ -75,6 +79,21 @@ def latest_document_text(messages: list[AnyMessage]) -> str | None:
         if documents:
             return "\n\n".join(documents)
     return None
+
+
+def _query_pdf_call_ids_this_turn(messages: list[AnyMessage]) -> list[str]:
+    """IDs of the `query_pdf` calls made since the last human message, in order."""
+    start = 0
+    for index, message in enumerate(messages):
+        if isinstance(message, HumanMessage):
+            start = index + 1
+    return [
+        call["id"]
+        for message in messages[start:]
+        if isinstance(message, AIMessage)
+        for call in message.tool_calls
+        if call["name"] == "query_pdf" and call["id"]
+    ]
 
 
 @tool
@@ -172,6 +191,21 @@ def query_pdf(question: str, runtime: ToolRuntime[Any]) -> str:
                 "shape_hint": "text",
                 "title": "No document",
                 "summary": "No document was found in the conversation. Ask the user to attach a PDF.",
+                "data": "",
+            }
+        )
+    over_limit = _query_pdf_call_ids_this_turn(runtime.state["messages"])[
+        MAX_QUERY_PDF_CALLS_PER_TURN:
+    ]
+    if runtime.tool_call_id in over_limit:
+        return json.dumps(
+            {
+                "shape_hint": "text",
+                "title": "Limit reached",
+                "summary": (
+                    "The limit of query_pdf calls for this turn is reached. "
+                    "Call generate_a2ui now to render the answer."
+                ),
                 "data": "",
             }
         )

@@ -16,12 +16,19 @@ def _doc(body: str, name: str = "report.pdf") -> str:
     return f"[Document: {name}]\n{body}"
 
 
-def _query(monkeypatch, messages: list, question: str = "What is it?"):
+def _query(
+    monkeypatch,
+    messages: list,
+    question: str = "What is it?",
+    tool_call_id: str | None = None,
+):
     stub = ScriptedModel([AIMessage(content=ANSWER)])
     monkeypatch.setattr(pdf_tools, "_EXTRACTOR", stub)
     tool = pdf_tools.query_pdf
     assert isinstance(tool, StructuredTool) and tool.func is not None
-    result = tool.func(question=question, runtime=fake_runtime(messages))
+    result = tool.func(
+        question=question, runtime=fake_runtime(messages, tool_call_id=tool_call_id)
+    )
     return stub, result
 
 
@@ -121,3 +128,87 @@ def test_tool_node_injects_the_runtime_with_the_graph_state(monkeypatch):
     assert isinstance(tool_message, ToolMessage)
     assert json.loads(str(tool_message.content))["shape_hint"] == "text"
     assert "GRAPH-BODY" in _user_prompt(stub)
+
+
+def _query_call(*ids: str) -> AIMessage:
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "query_pdf", "args": {"question": "Q?"}, "id": call_id}
+            for call_id in ids
+        ],
+    )
+
+
+def _answered(call_id: str) -> ToolMessage:
+    return ToolMessage(content=ANSWER, tool_call_id=call_id, name="query_pdf")
+
+
+def test_third_sequential_call_in_a_turn_is_refused(monkeypatch):
+    messages = [
+        HumanMessage(content=_doc("BODY")),
+        _query_call("c1"),
+        _answered("c1"),
+        _query_call("c2"),
+        _answered("c2"),
+        _query_call("c3"),
+    ]
+    stub, result = _query(monkeypatch, messages, tool_call_id="c3")
+    assert stub.calls == []
+    data = json.loads(result)
+    assert data["shape_hint"] == "text"
+    assert "generate_a2ui" in data["summary"]
+    assert "limit" in data["summary"].lower()
+
+
+def test_first_two_sequential_calls_in_a_turn_run(monkeypatch):
+    messages = [
+        HumanMessage(content=_doc("BODY")),
+        _query_call("c1"),
+        _answered("c1"),
+        _query_call("c2"),
+    ]
+    for call_id in ("c1", "c2"):
+        stub, result = _query(monkeypatch, messages, tool_call_id=call_id)
+        assert len(stub.calls) == 1
+        assert result == ANSWER
+
+
+def test_parallel_calls_in_one_message_are_capped_by_call_id(monkeypatch):
+    messages = [HumanMessage(content=_doc("BODY")), _query_call("c1", "c2", "c3")]
+    outcomes = {}
+    for call_id in ("c1", "c2", "c3"):
+        stub, result = _query(monkeypatch, messages, tool_call_id=call_id)
+        outcomes[call_id] = (len(stub.calls), result)
+    assert outcomes["c1"] == (1, ANSWER)
+    assert outcomes["c2"] == (1, ANSWER)
+    assert outcomes["c3"][0] == 0
+    assert json.loads(outcomes["c3"][1])["shape_hint"] == "text"
+
+
+def test_a_newer_human_message_resets_the_count(monkeypatch):
+    messages = [
+        HumanMessage(content=_doc("BODY")),
+        _query_call("c1", "c2"),
+        _answered("c1"),
+        _answered("c2"),
+        AIMessage(content=""),
+        HumanMessage(content="And the margin?"),
+        _query_call("c3"),
+    ]
+    stub, result = _query(monkeypatch, messages, tool_call_id="c3")
+    assert len(stub.calls) == 1
+    assert result == ANSWER
+
+
+def test_other_tools_do_not_count_toward_the_cap(monkeypatch):
+    other = AIMessage(
+        content="", tool_calls=[{"name": "generate_a2ui", "args": {}, "id": "g1"}]
+    )
+    messages = [
+        HumanMessage(content=_doc("BODY")),
+        other,
+        _query_call("c1", "c2"),
+    ]
+    stub, _ = _query(monkeypatch, messages, tool_call_id="c2")
+    assert len(stub.calls) == 1

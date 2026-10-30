@@ -51,6 +51,18 @@ RENDER_MODEL = "ministral-8b-2512"
 REQUEST_TIMEOUT_S = 45
 MAX_RETRIES = 1
 
+# LangGraph supersteps allowed per turn. Measured on the real dynamic graph
+# (middlewares included) with scripted models: 11 for a normal turn (one
+# `query_pdf` then `generate_a2ui`), 15 with two `query_pdf`, 19 with three, 23
+# with four; each extra model-and-tool round costs 4 supersteps. A live run on
+# an ordinary question made the model call `query_pdf` three times (its
+# extractor had failed on invalid JSON), which is 19 of a former limit of 20:
+# one more refusal would have cut the stream mid-turn with no message for the
+# user. 24 is the 23 of the four-call turn plus one step of slack. A `/fixed`
+# turn needs 10. Raise it only with a new measurement (see
+# tests/test_turn_limits.py).
+AGENT_RECURSION_LIMIT = 24
+
 
 def chat_model(model: str) -> ChatMistralAI:
     """Build a deterministic Mistral chat client with the shared limits."""
@@ -130,10 +142,17 @@ def agent_chat_model(model: str = AGENT_MODEL) -> ChatMistralAI:
     Use it for the model passed to `create_agent` only. The render model must
     stay a plain `chat_model`: its inner tool call would otherwise stream to
     the client as a tool call of its own.
+
+    Tool calls are requested one at a time (`parallel_tool_calls: false`, a
+    documented Mistral chat-completions parameter). A single model message once
+    carried two `generate_a2ui` calls, which rendered two surfaces and two chat
+    steps for one turn, and `return_direct` only stops the graph after the whole
+    batch of calls has run.
     """
     return _StreamingToolCallMistral(
         model_name=model,
         temperature=0,
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,
+        model_kwargs={"parallel_tool_calls": False},
     )
