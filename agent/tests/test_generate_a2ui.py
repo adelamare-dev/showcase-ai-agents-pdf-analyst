@@ -185,7 +185,7 @@ class _RenderLoopingModel(BaseChatModel):
 
 def test_turn_ends_after_the_first_surface(monkeypatch):
     main_model = _RenderLoopingModel(calls=[])
-    monkeypatch.setattr(dynamic_agent, "agent_chat_model", lambda: main_model)
+    monkeypatch.setattr(dynamic_agent, "agent_chat_model", lambda _model: main_model)
     monkeypatch.setattr(
         dynamic_agent, "_RENDER_MODEL", ScriptedModel([_render_call()] * 5)
     )

@@ -22,7 +22,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
-from src.models import agent_chat_model
+from src.models import AGENT_MODEL, agent_chat_model
 
 SCHEMA_DIR = Path(__file__).parent / "a2ui" / "schemas"
 # Read explicitly as UTF-8: a2ui.load_schema opens the file without an encoding,
@@ -189,9 +189,9 @@ more than two suggestions.
 """
 
 
-def build_fixed_agent():
+def build_fixed_agent(agent_model: str = AGENT_MODEL):
     return create_agent(
-        model=agent_chat_model(),
+        model=agent_chat_model(agent_model),
         tools=[render_dashboard],
         # CopilotKitMiddleware forwards frontend tools + agent context (e.g.
         # useAgentContext payloads) to the LLM. MistralErrorMiddleware stays

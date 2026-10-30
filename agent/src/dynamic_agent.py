@@ -54,7 +54,7 @@ from src.a2ui_validation import fallback_components, validate_components
 from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
-from src.models import RENDER_MODEL, agent_chat_model, chat_model
+from src.models import AGENT_MODEL, RENDER_MODEL, agent_chat_model, chat_model
 from src.pdf_tools import query_pdf
 
 
@@ -270,9 +270,9 @@ above. Skip charts unless the user explicitly asked for data viz.
 """
 
 
-def build_dynamic_agent():
+def build_dynamic_agent(agent_model: str = AGENT_MODEL):
     return create_agent(
-        model=agent_chat_model(),
+        model=agent_chat_model(agent_model),
         tools=[query_pdf, generate_a2ui],
         middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
         system_prompt=SYSTEM_PROMPT,

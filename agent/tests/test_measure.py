@@ -58,6 +58,27 @@ def test_describe_error_keeps_http_errors_terse_and_explains_others():
     assert len(describe_error(RuntimeError("x" * 500))) < 230
 
 
+def test_agent_model_option_reaches_both_graphs(monkeypatch):
+    from scripts.measure import build_graphs
+    from src import dynamic_agent, fixed_agent, models, pdf_tools
+
+    seen = []
+
+    def recording(model: str = models.AGENT_MODEL):
+        seen.append(model)
+        return models.agent_chat_model(model)
+
+    monkeypatch.setattr(fixed_agent, "agent_chat_model", recording)
+    monkeypatch.setattr(dynamic_agent, "agent_chat_model", recording)
+    # build_graphs assigns these two globals: registered so they get restored.
+    monkeypatch.setattr(pdf_tools, "_EXTRACTOR", pdf_tools._EXTRACTOR)
+    monkeypatch.setattr(dynamic_agent, "_RENDER_MODEL", dynamic_agent._RENDER_MODEL)
+
+    build_graphs({"agent": "agent-x", "extractor": "extractor-x", "render": "render-x"})
+
+    assert seen == ["agent-x", "agent-x"]
+
+
 def test_turns_on_one_event_loop_reuse_the_same_model_client():
     """A real ChatMistralAI keeps pooled connections bound to the loop that
     first used them: one `asyncio.run` per turn breaks the second turn with

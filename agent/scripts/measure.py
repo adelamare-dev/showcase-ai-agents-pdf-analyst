@@ -272,13 +272,11 @@ def build_graphs(models: dict[str, str]) -> dict[str, Any]:
     from src import dynamic_agent, fixed_agent, pdf_tools
     from src.models import chat_model
 
-    fixed_agent.AGENT_MODEL = models["agent"]
-    dynamic_agent.AGENT_MODEL = models["agent"]
     pdf_tools._EXTRACTOR = chat_model(models["extractor"])
     dynamic_agent._RENDER_MODEL = chat_model(models["render"])
     return {
-        "fixed": fixed_agent.build_fixed_agent(),
-        "dynamic": dynamic_agent.build_dynamic_agent(),
+        "fixed": fixed_agent.build_fixed_agent(models["agent"]),
+        "dynamic": dynamic_agent.build_dynamic_agent(models["agent"]),
     }
 
 
