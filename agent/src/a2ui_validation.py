@@ -5,10 +5,10 @@ hard-coded tree, so there is nothing to validate there.
 
 Known limit: only the shape of the surface is checked here (list of dicts,
 unique ids, a single `root`, known component types, resolvable child
-references). Component props are NOT validated in Python; their Zod schemas on
-the client remain the only check. Component names are derived from the
-`- **Name**` lines of `CATALOG_PROMPT`, so changing that line format breaks
-the validation.
+references), plus the optional props restricted to a list of values. Other props
+are NOT validated in Python; their Zod schemas on the client remain the only
+check. Component names and those lists are derived from the `- **Name**` lines
+of `CATALOG_PROMPT`, so changing that line format breaks the validation.
 """
 
 from __future__ import annotations
@@ -100,6 +100,38 @@ def normalize_heading_levels(components: list) -> None:
             item["level"] = level
         else:
             del item["level"]
+
+
+def optional_choices(prompt: str) -> dict[str, dict[str, frozenset[str]]]:
+    """Optional props limited to a list of values (`weight?: regular|medium`), by
+    component. Free text (`string|{path}`), ranges and booleans do not match."""
+    choices: dict[str, dict[str, frozenset[str]]] = {}
+    for name, summary in re.findall(r"^- \*\*(\w+)\*\*(.*)$", prompt, flags=re.M):
+        props = re.findall(r'(\w+)\?:\s*("?\w+"?(?:\|"?\w+"?)+)(?![|\w{])', summary)
+        if props:
+            choices[name] = {
+                prop: frozenset(values.replace('"', "").split("|"))
+                for prop, values in props
+            }
+    return choices
+
+
+CATALOG_CHOICES = optional_choices(CATALOG_PROMPT)
+
+
+def drop_invalid_choices(components: list) -> None:
+    """Remove, in place, optional props whose value is not one of the allowed ones.
+
+    The client replaces a whole component with a visible alert when one prop is
+    invalid, and the model writes such values now and then (`weight: 1`). The
+    props are optional, so the component still renders without them.
+    """
+    for item in components:
+        choices = CATALOG_CHOICES.get(item.get("component"), {})
+        for prop, allowed in choices.items():
+            value = item.get(prop)
+            if prop in item and not (isinstance(value, str) and value in allowed):
+                del item[prop]
 
 
 _GENERIC_TITLE = "Réponse"
