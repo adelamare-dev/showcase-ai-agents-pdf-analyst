@@ -126,6 +126,23 @@ class MistralErrorMiddleware(AgentMiddleware[StateT]):
                 }
         return None
 
+    def after_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+        """Say the French message when a `return_direct` tool ended the run.
+
+        The graph then goes straight from the tool to the end, so `before_model`
+        never sees the failed result. When `before_model` did end the run, the
+        last message is already its reply and nothing is added.
+        """
+        messages = state["messages"]
+        last = messages[-1] if messages else None
+        if isinstance(last, ToolMessage):
+            content = last.content
+            if isinstance(content, str) and content.startswith(TOOL_ERROR_PREFIX):
+                return {
+                    "messages": [AIMessage(content=content[len(TOOL_ERROR_PREFIX) :])]
+                }
+        return None
+
 
 def _tool_error(request: Any, message: str) -> ToolMessage:
     return ToolMessage(

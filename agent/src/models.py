@@ -19,6 +19,10 @@ The extractor role has been escalated once: on 3B, only 1 call in 4 read the
 columns of a table correctly (shifted values, invented labels, decimal commas
 outside JSON strings), against 4 in 4 on 8B, with the same text and prompt.
 
+The `render_dashboard` step of the `/fixed` agent is also done by the 8B
+extractor: the agent model only routes, the extractor reads the document and
+fills the dashboard, as `query_pdf` does on the dynamic graph.
+
 The render role has been escalated once: on 3B, follow-up questions came back
 as nested component trees that failed validation twice in a row, so the user
 only got the text fallback. 8B returns the flat component list.
@@ -59,12 +63,13 @@ MAX_RETRIES = 1
 # (middlewares included) with scripted models: 11 for a normal turn (one
 # `query_pdf` then `generate_a2ui`), 15 with two `query_pdf`, 19 with three, 23
 # with four; each extra model-and-tool round costs 4 supersteps. The routing of
-# the dynamic graph keeps a turn at 11. The margin only matters if the provider
-# ignores `tool_choice`: 24 is the 23 of the four-call turn plus one step of
-# slack, past which the stream is cut with no message for the user. A `/fixed`
-# turn needs 10. Raise it only with a new measurement (see
-# tests/test_turn_limits.py).
-AGENT_RECURSION_LIMIT = 24
+# the dynamic graph keeps a turn at 11. The two hooks that run once per turn
+# (the missing-document check and the French reply to a failed tool) add one
+# step each to those figures. The margin only matters if the provider ignores
+# `tool_choice`: 25 is the four-call turn with those two steps, past which the
+# stream is cut with no message for the user. Raise it only with a new
+# measurement (see tests/test_turn_limits.py).
+AGENT_RECURSION_LIMIT = 25
 
 
 def chat_model(model: str, *, disable_streaming: bool = False) -> ChatMistralAI:

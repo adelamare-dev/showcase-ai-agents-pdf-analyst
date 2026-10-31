@@ -46,12 +46,10 @@ asking the model for it (`PdfTurnRoutingMiddleware`): `query_pdf`, then
 from __future__ import annotations
 
 import json
-from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from copilotkit import CopilotKitMiddleware, a2ui
 from langchain.agents import create_agent
-from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, SystemMessage
 from langchain_core.tools import tool as lc_tool
@@ -69,48 +67,21 @@ from src.locale import FRENCH_OUTPUT_RULE
 from src.models import AGENT_MODEL, RENDER_MODEL, agent_chat_model, chat_model
 from src.pdf_tools import (
     extraction_failed,
-    latest_document_text,
     query_pdf,
     query_pdf_call_ids_this_turn,
     without_document_text,
 )
+from src.routing import PdfTurnRoutingMiddleware
 
-# Adopts the state schema of the other middleware, as `MistralErrorMiddleware`
-# does, to stay in the same `middleware=[...]` list for the type checker.
-StateT = TypeVar("StateT", bound=AgentState)
+
+NO_DOCUMENT_REPLY = "Joignez un PDF et je génère la réponse."
 
 
 def _required_tool(messages: list[AnyMessage]) -> str:
-    """The `tool_choice` of the next model call: a tool's name, or "none"."""
-    if latest_document_text(messages) is None:
-        return "none"
+    """The tool the next model call must make, once a document is attached."""
     if not query_pdf_call_ids_this_turn(messages):
         return "query_pdf"
     return "generate_a2ui"
-
-
-class PdfTurnRoutingMiddleware(AgentMiddleware[StateT]):
-    """Decide the tool of each model call instead of leaving it to the model.
-
-    A turn on this graph has a single valid course: `query_pdf`, then
-    `generate_a2ui`. The code imposes it instead of asking the model, which,
-    left to choose, sometimes answers with an empty message without calling a
-    tool or calls `query_pdf` in a loop, and a booby-trapped document could push
-    it there. Without a document no tool is allowed: the model still called both
-    and rendered a surface about nothing, when all it has to do is ask for a PDF.
-    """
-
-    def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        return handler(_routed(request))
-
-    async def awrap_model_call(
-        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
-    ) -> Any:
-        return await handler(_routed(request))
-
-
-def _routed(request: Any) -> Any:
-    return request.override(tool_choice=_required_tool(request.state["messages"]))
 
 
 # No-op shim. The secondary LLM is forced to call this tool so its output
@@ -148,6 +119,36 @@ RENDER_EXAMPLE = [
         "data": [{"label": "T1", "value": 41.2}, {"label": "T2", "value": 43.0}],
     },
 ]
+
+
+# Addressed to the render model, the only one that designs the surface. The
+# agent model never sees it: its tools are imposed and it has no layout to pick.
+RENDER_LAYOUT_GUIDE = """\
+## Layout guidance
+
+When the user is specific ("three line charts stacked", "side-by-side cards"),
+honor it. Otherwise follow the `shape_hint` of the LAST query_pdf result:
+
+- `stat`  -> Stack(Overline, StatCard)
+- `trend` -> Stack(Section -> Card -> LineChart)
+- `share` -> Stack(Section -> Card -> DonutChart)
+- `table` -> Stack(Section -> Card -> DataTable)
+- `text`  -> Rich explainer. Compose multiple components, not just one Card:
+              Stack(
+                Overline(topic),
+                Heading(title),
+                Text(intro paragraph, 2-4 sentences),
+                Callout(tone=info, title="Idée clé", body=core insight),
+                Section(title="Pourquoi c'est important", child=Card(Text(...))),
+                BulletList(items=[3 key points]),
+              )
+              Use Callout for the "headline takeaway", BulletList for
+              enumerations, and Text for paragraphs. Mix with one chart
+              ONLY if the question genuinely benefits from data viz.
+
+Heuristic for research-paper questions: prefer the rich `text` layout above.
+Skip charts unless the user explicitly asked for data viz.
+"""
 
 
 # return_direct ends the turn as soon as the surface is produced. The prompt
@@ -196,6 +197,7 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
 
     prompt = (
         f"{context_text}\n{custom_catalog_note}\n"
+        f"{RENDER_LAYOUT_GUIDE}\n"
         f"{FRENCH_OUTPUT_RULE}\n"
         "Design the surface using ONLY components from the catalog above. "
         "Every number, label and fact on the surface comes from the LAST "
@@ -257,84 +259,23 @@ def generate_a2ui(runtime: ToolRuntime[Any]) -> str:
 
 
 SYSTEM_PROMPT = f"""\
-You answer questions about a user's attached PDF and render the answer
-as an A2UI surface using our custom catalog.
+You answer questions about a user's attached PDF. Two tools do the work: one
+reads the document, the other renders the answer as a surface the user sees.
 
-## Where the PDF lives
+The frontend extracts the PDF text and inlines it into the user's message under
+a `[Document: <filename>]` header. The PDF may have been attached on this turn
+or on any earlier one.
 
-The frontend extracts the PDF text and inlines it into the user's
-message under a `[Document: <filename>]` header. The PDF may have been
-attached on the CURRENT turn or on ANY EARLIER turn in this conversation.
-A user typically attaches a PDF once and then asks several follow-up
-questions about it without re-attaching.
+## How a turn goes
 
-## How to find the PDF text
+Call `query_pdf(question=<the user's question on THIS turn>)` with only the
+question: the tool reads the document itself. Then call `generate_a2ui()` with
+no argument.
 
-Scan the entire conversation history (every user message, oldest to
-newest). Find the MOST RECENT user message that contains a
-`[Document: <filename>]` header. That message's body is the active PDF
-text and applies to every subsequent follow-up question UNTIL the user
-attaches a different PDF.
-
-Only if NO message in the history has ever contained a
-`[Document: ...]` header should you ask the user to attach a PDF.
-
-## How a turn MUST go (do not deviate)
-
-1. If NO message in the conversation history has a `[Document: ...]`
-   header, reply with a single sentence: "Joignez un PDF et je
-   génère la réponse." STOP. Do not call any tool.
-2. Otherwise (a PDF is available from this turn or a previous one):
-   a. ONE call to `query_pdf(question=<the user's question on THIS
-      turn>)`. Pass only the question: the tool reads the document itself.
-      It returns JSON with shape_hint, title, summary, data. Read it
-      silently. DO NOT type the JSON anywhere.
-   b. ONE call to `generate_a2ui()`. No arguments.
-   c. STOP. The rendered surface IS the user-visible answer.
-
-## Absolute hard rules. Breaking ANY of these causes a crash.
-
-- After `generate_a2ui` returns, you are DONE for this turn. Do not call
-  `query_pdf` again. Do not call `generate_a2ui` again.
-- NEVER include the query_pdf JSON in your reply.
-- NEVER include any tool's return value in your reply.
-- NEVER quote the PDF text, summarize the document, or echo any part of
-  the document back into the chat.
-
-## Layout guidance for generate_a2ui
-
-The secondary LLM sees the same conversation you do. When the user is
-specific ("three line charts stacked", "side-by-side cards"), the
-secondary LLM will honor it. Defaults per shape_hint:
-
-- `stat`  -> Stack(Overline, StatCard)
-- `trend` -> Stack(Section -> Card -> LineChart)
-- `share` -> Stack(Section -> Card -> DonutChart)
-- `table` -> Stack(Section -> Card -> DataTable)
-- `text`  -> Rich explainer. Compose multiple components, not just one Card:
-              Stack(
-                Overline(topic),
-                Heading(title),
-                Text(intro paragraph, 2-4 sentences),
-                Callout(tone=info, title="Idée clé", body=core insight),
-                Section(title="Pourquoi c'est important", child=Card(Text(...))),
-                BulletList(items=[3 key points]),
-              )
-              Use Callout for the "headline takeaway", BulletList for
-              enumerations, and Text for paragraphs. Mix with one chart
-              ONLY if the question genuinely benefits from data viz.
-
-Heuristic for research-paper questions: prefer the rich `text` layout
-above. Skip charts unless the user explicitly asked for data viz.
-
-## Restating the loop guard
-
-- Max two tool calls per turn. query_pdf (once) + generate_a2ui (once).
-- After generate_a2ui returns, STOP IMMEDIATELY.
-- Never describe the surface in prose. The surface IS the answer.
+Never type a tool result, any part of the document text, or a description of
+the surface in your reply: the surface is the answer.
 
 {FRENCH_OUTPUT_RULE}
-{CATALOG_PROMPT}
 """
 
 
@@ -344,7 +285,7 @@ def build_dynamic_agent(agent_model: str = AGENT_MODEL):
         tools=[query_pdf, generate_a2ui],
         middleware=[
             CopilotKitMiddleware(),
-            PdfTurnRoutingMiddleware(),
+            PdfTurnRoutingMiddleware(_required_tool, NO_DOCUMENT_REPLY),
             MistralErrorMiddleware(),
         ],
         system_prompt=SYSTEM_PROMPT,

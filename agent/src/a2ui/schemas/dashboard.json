@@ -62,7 +62,6 @@
     "label": { "path": "/kpis/0/label" },
     "value": { "path": "/kpis/0/value" },
     "delta": { "path": "/kpis/0/delta" },
-    "deltaTone": "positive",
     "caption": { "path": "/kpis/0/caption" }
   },
   {
@@ -71,7 +70,6 @@
     "label": { "path": "/kpis/1/label" },
     "value": { "path": "/kpis/1/value" },
     "delta": { "path": "/kpis/1/delta" },
-    "deltaTone": "positive",
     "caption": { "path": "/kpis/1/caption" }
   },
   {
@@ -80,7 +78,6 @@
     "label": { "path": "/kpis/2/label" },
     "value": { "path": "/kpis/2/value" },
     "delta": { "path": "/kpis/2/delta" },
-    "deltaTone": "positive",
     "caption": { "path": "/kpis/2/caption" }
   },
   {
@@ -89,7 +86,6 @@
     "label": { "path": "/kpis/3/label" },
     "value": { "path": "/kpis/3/value" },
     "delta": { "path": "/kpis/3/delta" },
-    "deltaTone": "negative",
     "caption": { "path": "/kpis/3/caption" }
   },
 

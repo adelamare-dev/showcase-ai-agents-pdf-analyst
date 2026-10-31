@@ -9,7 +9,7 @@ from langchain_core.tools import StructuredTool
 
 from src import dynamic_agent
 from src.a2ui_validation import validate_components
-from src.catalog import CATALOG_ID
+from src.catalog import CATALOG_ID, CATALOG_PROMPT
 from tests.fakes import ScriptedModel, fake_runtime
 
 
@@ -204,6 +204,15 @@ class _RenderLoopingModel(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=reply)])
 
 
+def _attached_question() -> HumanMessage:
+    return HumanMessage(
+        content=[
+            {"type": "text", "text": "q"},
+            {"type": "text", "text": "[Document: x.pdf]\nBODY"},
+        ]
+    )
+
+
 def test_turn_ends_after_the_first_surface(monkeypatch):
     main_model = _RenderLoopingModel(calls=[])
     monkeypatch.setattr(dynamic_agent, "agent_chat_model", lambda _model: main_model)
@@ -213,7 +222,7 @@ def test_turn_ends_after_the_first_surface(monkeypatch):
     graph = dynamic_agent.build_dynamic_agent()
     result = asyncio.run(
         graph.ainvoke(
-            {"messages": [HumanMessage(content="q")]},
+            {"messages": [_attached_question()]},
             config={"configurable": {"thread_id": "t1"}, "recursion_limit": 12},
         )
     )
@@ -272,3 +281,23 @@ def test_render_model_sees_the_extraction_but_not_the_document(monkeypatch):
 def test_system_prompt_no_longer_asks_for_an_empty_reply():
     assert "empty string" not in dynamic_agent.SYSTEM_PROMPT
     assert '""' not in dynamic_agent.SYSTEM_PROMPT
+
+
+def test_render_prompt_carries_the_layout_guide_after_the_catalog(monkeypatch):
+    stub, _ = _run_scripted(monkeypatch, [_render_call()])
+    prompt = stub.calls[0][0].content
+    guide = dynamic_agent.RENDER_LAYOUT_GUIDE
+    assert guide in prompt
+    assert "`trend`" in guide and "Idée clé" in guide
+    assert prompt.index(CATALOG_PROMPT) < prompt.index(guide)
+    assert prompt.index(guide) < prompt.index(json.dumps(dynamic_agent.RENDER_EXAMPLE))
+
+
+def test_agent_prompt_leaves_the_catalog_and_layout_to_the_render_model():
+    prompt = dynamic_agent.SYSTEM_PROMPT
+    assert CATALOG_PROMPT not in prompt
+    assert dynamic_agent.RENDER_LAYOUT_GUIDE not in prompt
+    assert "Idée clé" not in prompt
+    assert "shape_hint" not in prompt
+    assert "Joignez" not in prompt
+    assert dynamic_agent.NO_DOCUMENT_REPLY == "Joignez un PDF et je génère la réponse."

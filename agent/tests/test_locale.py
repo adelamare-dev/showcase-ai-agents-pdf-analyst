@@ -15,9 +15,9 @@ def test_dynamic_agent_prompt_carries_the_french_rule():
     assert FRENCH_OUTPUT_RULE in dynamic_agent.SYSTEM_PROMPT
 
 
-def test_dynamic_agent_asks_for_a_pdf_in_french():
-    assert "Joignez un PDF" in dynamic_agent.SYSTEM_PROMPT
-    assert "Attach a PDF" not in dynamic_agent.SYSTEM_PROMPT
+def test_both_agents_ask_for_a_pdf_in_french():
+    assert dynamic_agent.NO_DOCUMENT_REPLY.startswith("Joignez un PDF")
+    assert fixed_agent.NO_DOCUMENT_REPLY.startswith("Joignez un PDF")
 
 
 def test_render_prompt_carries_the_french_rule(monkeypatch):

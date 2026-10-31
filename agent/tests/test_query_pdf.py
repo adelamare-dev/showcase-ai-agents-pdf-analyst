@@ -219,13 +219,14 @@ def _system_prompt(stub: ScriptedModel) -> str:
     return stub.calls[0][0][1]
 
 
-def test_system_prompt_carries_the_extraction_rules(monkeypatch):
+def test_system_prompt_carries_the_reading_and_json_rules(monkeypatch):
     stub, _ = _query(monkeypatch, [HumanMessage(content=_doc("BODY"))])
-    assert pdf_tools._EXTRACTION_RULES in _system_prompt(stub)
-    assert "never 0,4" in pdf_tools._EXTRACTION_RULES
-    assert _system_prompt(stub).index(FRENCH_OUTPUT_RULE) < _system_prompt(stub).index(
-        pdf_tools._EXTRACTION_RULES
-    )
+    prompt = _system_prompt(stub)
+    assert pdf_tools.READING_RULES in prompt
+    assert "never 0,4" in pdf_tools._JSON_RULES
+    assert prompt.index(FRENCH_OUTPUT_RULE) < prompt.index(pdf_tools.READING_RULES)
+    assert prompt.index(pdf_tools.READING_RULES) < prompt.index(pdf_tools._JSON_RULES)
+    assert prompt.endswith(f"{pdf_tools.READING_RULES}\n{pdf_tools._JSON_RULES}")
 
 
 def _query_returning(monkeypatch, raw: str) -> tuple[ScriptedModel, str]:

@@ -1,28 +1,50 @@
 """Fixed-schema dashboard agent.
 
-The user attaches a PDF in the chat. The deep agent reads the PDF text
-(inlined into the user message by InlineDocumentsMiddleware) and calls
-`render_dashboard` with the structured data extracted in the same model
-pass. The dashboard surface includes an interactive scope-chips strip
-that the agent populates from the document. Clicking a chip fires a
-user action back to the agent, which re-renders with the new scope.
+The user attaches a PDF in the chat. The agent model only routes: it calls
+`render_dashboard`, and the 8B extractor reads the document (inlined into the
+user message by `src/multimodal_middleware.py`) and fills the dashboard. The surface
+includes an interactive scope-chips strip tailored to the document. Clicking a
+chip fires a user action back to the agent, which re-renders with that focus.
+
+The extractor fills the dashboard, but the code decides what reaches the screen
+(`src/dashboard_checks.py`): a number the document does not write is dropped,
+and a block with no data is removed from the surface instead of being padded.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
-from typing import TypedDict
+from typing import Any
 
 from copilotkit import CopilotKitMiddleware, a2ui
 from langchain.agents import create_agent
-from langchain.tools import tool
+from langchain.tools import ToolRuntime, tool
+from langchain_core.messages import AnyMessage, ToolMessage
 
-from src.catalog import CATALOG_ID, CATALOG_PROMPT
+from src.catalog import CATALOG_ID
 from src.checkpoints import BoundedMemorySaver
+from src.dashboard_checks import (
+    MAX_KPIS,
+    checked_kpis,
+    checked_rows,
+    checked_scope,
+    checked_share,
+    checked_trend,
+    text_or_empty,
+)
 from src.errors import MistralErrorMiddleware
 from src.locale import FRENCH_OUTPUT_RULE
 from src.models import AGENT_MODEL, agent_chat_model
+from src.pdf_tools import (
+    EXTRACTION_FAILED,
+    JSON_NUMBER_RULE,
+    READING_RULES,
+    extract_json,
+    latest_document_text,
+)
+from src.routing import PdfTurnRoutingMiddleware
 
 SCHEMA_DIR = Path(__file__).parent / "a2ui" / "schemas"
 # Read explicitly as UTF-8: a2ui.load_schema opens the file without an encoding,
@@ -31,162 +53,219 @@ DASHBOARD_SCHEMA = json.loads(
     (SCHEMA_DIR / "dashboard.json").read_text(encoding="utf-8")
 )
 SURFACE = "pdf-dashboard"
+NO_DOCUMENT_REPLY = "Joignez un PDF et je génère le tableau de bord."
 
 
-class Kpi(TypedDict):
-    label: str
-    value: str
-    delta: str
-    caption: str
+def _dashboard_components(
+    kpi_count: int,
+    has_trend: bool,
+    has_share: bool,
+    has_rows: bool,
+    has_scope: bool,
+) -> list[dict]:
+    """The dashboard template without the blocks that have no data.
+
+    Returns a copy of `DASHBOARD_SCHEMA`. A grid is as wide as it has children,
+    so a lone chart takes the full width, and only the components reachable from
+    the root are kept.
+    """
+    components = {c["id"]: copy.deepcopy(c) for c in DASHBOARD_SCHEMA}
+    absent = {f"kpi-{n}" for n in range(kpi_count + 1, MAX_KPIS + 1)}
+    if not has_trend:
+        absent.add("trend-section")
+    if not has_share:
+        absent.add("share-section")
+    if not has_trend and not has_share:
+        absent.add("charts-grid")
+    if kpi_count == 0:
+        absent.add("kpi-grid")
+    if not has_rows:
+        absent.add("table-section")
+    if not has_scope:
+        absent.add("scope-chips")
+
+    for component in components.values():
+        if "children" not in component:
+            continue
+        component["children"] = [c for c in component["children"] if c not in absent]
+        if component["component"] == "Grid" and component["children"]:
+            component["columns"] = len(component["children"])
+
+    reachable: set[str] = set()
+    pending = ["root"]
+    while pending:
+        current = pending.pop()
+        if current in reachable:
+            continue
+        reachable.add(current)
+        node = components[current]
+        pending.extend(node.get("children", []))
+        if "child" in node:
+            pending.append(node["child"])
+    return [c for c in components.values() if c["id"] in reachable]
 
 
-class Point(TypedDict):
-    label: str
-    value: float
+DASHBOARD_EXTRACTION_PROMPT = f"""\
+You are a careful data extractor. Read the PDF text and fill a dashboard about
+it. Return ONLY one JSON object, no prose, no markdown fences, with these keys:
+
+- "eyebrow": short ALL-CAPS context, e.g. "T3 2025 · NOTE DE CONJONCTURE".
+- "title": short headline, 8 words at most.
+- "subtitle": one sentence summarizing the document.
+- "kpis": up to 4 cards {{"label", "value", "delta", "caption"}}.
+  * "value" is the headline number formatted the French way ("94 930 M€",
+    "23,4 %"), copied from the document.
+  * "delta" is only a variation the document writes for that value, short
+    ("+6,1 %", "-3 %", at most 12 characters), otherwise "". Never compute a
+    difference. Never put prose in it.
+  * "caption" is where the comparison or context sentence goes (about 80
+    characters at most).
+- "trend": a list of {{"label", "value"}} points. Only one row of a table, with
+  its periods copied exactly from the header, at least 2 points. Otherwise [].
+- "share": a list of {{"label", "value"}} slices. Only if the document itself
+  gives the parts of one whole. Contributions to growth, variations and rates
+  are not parts. Never compute a share. Otherwise [].
+- "rows": up to 8 table rows {{"name", "category", "value", "delta"}}, only if
+  the document has such a list. The "delta" rule above applies. Otherwise [].
+- "scope_options": 2 to 6 chips {{"label", "value"}} the user can click to
+  change the focus, tailored to what THIS document supports (for a quarterly
+  report: a period, a breakdown by segment, by region...).
+- "scope_selected": the "value" of the active chip. If the focus names a chip,
+  it is that chip's value.
+
+An empty list or an empty string is a good answer: a length is never a reason to
+add a value.
+
+{FRENCH_OUTPUT_RULE}
+{READING_RULES}
+{JSON_NUMBER_RULE}"""
 
 
-class Row(TypedDict):
-    name: str
-    category: str
-    value: str
-    delta: str
+def _extraction_user_prompt(focus: str, document: str) -> str:
+    return f"""\
+Focus: {focus}
+
+PDF text:
+\"\"\"
+{document}
+\"\"\"
+"""
 
 
-class ScopeOption(TypedDict):
-    label: str
-    value: str
+def _failure_components() -> list[dict]:
+    return [
+        {
+            "id": "root",
+            "component": "Stack",
+            "children": ["failure-title", "failure-summary"],
+        },
+        {
+            "id": "failure-title",
+            "component": "Heading",
+            "text": EXTRACTION_FAILED["title"],
+            "level": "2",
+        },
+        {
+            "id": "failure-summary",
+            "component": "Text",
+            "text": EXTRACTION_FAILED["summary"],
+        },
+    ]
 
 
-@tool
-def render_dashboard(
-    eyebrow: str,
-    title: str,
-    subtitle: str,
-    kpis: list[Kpi],
-    trend: list[Point],
-    share: list[Point],
-    rows: list[Row],
-    scope_options: list[ScopeOption],
-    scope_selected: str,
-) -> str:
+def _failure_surface() -> str:
+    return a2ui.render(
+        operations=[
+            a2ui.create_surface(SURFACE, catalog_id=CATALOG_ID),
+            a2ui.update_components(SURFACE, _failure_components()),
+        ]
+    )
+
+
+# return_direct ends the turn with the surface: the agent model has nothing to
+# add after it, and a small model would otherwise echo or re-render it.
+@tool(return_direct=True)
+def render_dashboard(focus: str, runtime: ToolRuntime[Any]) -> str:
     """Render the interactive dashboard for the loaded PDF.
 
-    Pass data INLINE. Call ONCE per turn.
-
-    Required shapes:
-      - kpis: EXACTLY 4 cards. Each {label, value, delta, caption}.
-
-        STRICT FIELD RULES (very important; the badge breaks if you ignore):
-          * `value`   = the headline number, formatted the French way
-                        ("94 930 M€", "23,4 %", "1,2 M d'unités"). 1–8 chars
-                        typically.
-          * `delta`   = JUST the magnitude of change. Format: "+X%", "-X%",
-                        or "" (empty string when there's no comparison).
-                        Number and "%" are separated by a space; the "+" or
-                        "-" sign sticks to the number.
-                        MAX 8 chars. NEVER prose. NEVER "vs. last quarter"
-                        or "vs 89 498 M€". The arrow and color come from
-                        the renderer.
-                        Examples: "+6,1 %", "-3 %", "+12 %", "+2,4 Md€", ""
-                        Bad:      "↑ vs 89 498 M€ au T4 2023"
-                                  "en hausse de 6 % sur un an"
-                                  "en hausse par rapport à 89 498 M€"
-          * `caption` = the comparison/context sentence ("vs 89 498 M€ au
-                        T4 2023", "Produits 69 958 M€ ; Services 24 972 M€",
-                        "Plus haut historique"). Up to ~80 chars. This is
-                        where the prose goes.
-
-      - trend: 6–12 points. {label, value:number}.
-      - share: 3–5 slices. {label, value:number}.
-      - rows: 5–8 table rows. Same delta rule applies: row.delta is
-        SHORT ("+6 %", "-3 %", ""). Verbose comparisons belong elsewhere.
-      - scope_options: 3–6 chips the user can click to re-scope. Each
-        {label, value}. Example for an Apple earnings PDF:
-          [{label:"T4 2024", value:"q4_fy24"},
-           {label:"Exercice 2024", value:"fy24"},
-           {label:"Par segment", value:"by_segment"},
-           {label:"Par région",  value:"by_region"}]
-        Tailor the options to what THIS document actually supports.
-      - scope_selected: the `value` of the currently active option.
+    `focus` is what to center the dashboard on: the user's request, or the
+    label of the chip they clicked. The tool reads the document itself, so
+    never copy the document text into the call. Call it once per turn.
     """
-    payload = {
-        "eyebrow": eyebrow,
-        "title": title,
-        "subtitle": subtitle,
+    document = latest_document_text(runtime.state["messages"])
+    if document is None:
+        return _failure_surface()
+    raw = extract_json(
+        DASHBOARD_EXTRACTION_PROMPT, _extraction_user_prompt(focus, document)
+    )
+    if raw is None:
+        return _failure_surface()
+    answer = json.loads(raw)
+
+    kpis = checked_kpis(answer.get("kpis"), document)
+    trend = checked_trend(answer.get("trend"), document)
+    share = checked_share(answer.get("share"), document)
+    rows = checked_rows(answer.get("rows"), document)
+    if not (kpis or trend or share or rows):
+        return _failure_surface()
+    scope = checked_scope(answer.get("scope_options"), answer.get("scope_selected"))
+
+    payload: dict[str, Any] = {
+        "eyebrow": text_or_empty(answer.get("eyebrow")),
+        "title": text_or_empty(answer.get("title")),
+        "subtitle": text_or_empty(answer.get("subtitle")),
         "kpis": kpis,
         "trend": trend,
         "share": share,
         "rows": rows,
-        "scope": {"options": scope_options, "selected": scope_selected},
     }
+    if scope is not None:
+        payload["scope"] = scope
+    components = _dashboard_components(
+        len(kpis), bool(trend), bool(share), bool(rows), scope is not None
+    )
     return a2ui.render(
         operations=[
             a2ui.create_surface(SURFACE, catalog_id=CATALOG_ID),
-            a2ui.update_components(SURFACE, DASHBOARD_SCHEMA),
+            a2ui.update_components(SURFACE, components),
             a2ui.update_data_model(SURFACE, payload),
         ]
     )
 
 
 SYSTEM_PROMPT = f"""\
-You build and maintain a live dashboard from the user's PDF.
+You answer questions about the user's attached PDF. You own one tool,
+`render_dashboard`, which builds the dashboard from the document: it reads the
+document itself, so pass it only a focus.
 
-## How a turn works
+- To render or re-render the dashboard, call `render_dashboard(focus=...)`
+  with what to center it on: the user's request, or the chip they clicked.
+  A chip click reaches you as a `log_a2ui_event` tool result like:
+      User performed action "select_chip" on surface "pdf-dashboard".
+      Context: {{"value": "fy24", "label": "Scope"}}
+- To answer an analytical question ("what was operating margin?"), reply in
+  the chat in 1-3 sentences, using only the document.
+- If the user wants a brand-new visualization the dashboard does not cover
+  (a sankey diagram, say), tell them to use the Dynamic tab.
 
-The user may do three things on any turn:
-  A) Attach a new PDF + chat (initial render).
-  B) Send a chat message ("re-render focused on energy storage",
-     "what was operating margin?", "compare last quarter").
-  C) Click a scope chip on the dashboard. The runtime delivers this as a
-     tool result `log_a2ui_event` with content like:
-        User performed action "select_chip" on surface "pdf-dashboard".
-        Context: {{"value": "fy24", "label": "Scope"}}
+Never type a tool result or any part of the document in your reply.
 
-In every case, decide whether to re-render the dashboard, answer in chat,
-or both.
-
-## The render contract
-
-When you render, call `render_dashboard(...)` ONCE with structured data:
-  - 4 KPIs, 6–12 trend points, 3–5 share slices, 5–8 rows.
-  - `scope_options`: 3–6 chips tailored to THIS PDF. Examples of good
-    chip sets:
-      - Apple Q4 PDF → [T4 2024, Exercice 2024, Par segment, Par région,
-                       Par catégorie]
-      - Tesla Q3 PDF → [T3 2024, Par modèle, Par région, Automobile vs
-                       Énergie, 4 derniers trimestres]
-  - `scope_selected`: which chip is active. Default to the most natural
-    starting scope for the document. After a chip click, set this to the
-    clicked value.
-
-When the user (or a chip click) asks to change scope:
-  - Re-extract the data for the new scope from the PDF text.
-  - Re-call render_dashboard with the SAME surfaceId so the canvas
-    updates in place. The scope_selected reflects the new active chip.
-
-## Hard rules
-
-- Render the dashboard whenever the user attaches a PDF (initial), asks
-  to re-render in any way, or clicks a chip.
-- Call `render_dashboard` AT MOST ONCE per turn. Never twice.
-- Use ONLY numbers that actually appear in the document.
-- If the user asks an analytical question that does NOT require a layout
-  change (e.g. "what was operating margin?"), answer in chat without
-  re-rendering. 1–3 sentences max. Cite the number.
-- If the user wants to invent a brand-new visualization not covered by
-  the fixed schema (e.g. "show a sankey diagram"), tell them to use the
-  Dynamic tab.
-
-## Chat tone
-
-Be helpful, brief, conversational. After the first render, you can
-suggest one or two follow-ups the user might click ("Touchez *Exercice 2024*
-pour la vue annuelle" or "Voulez-vous le détail par segment ?"). Don't list
-more than two suggestions.
-
+{READING_RULES}
 {FRENCH_OUTPUT_RULE}
-{CATALOG_PROMPT}
 """
+
+
+def _required_tool(messages: list[AnyMessage]) -> str | None:
+    """Impose the dashboard until the thread holds one, then leave the model free.
+
+    The first turn on a document always renders, which is what the page is for.
+    After that, a question is answered in chat and a chip click re-renders, both
+    of the model's choosing.
+    """
+    has_dashboard = any(
+        isinstance(m, ToolMessage) and m.name == "render_dashboard" for m in messages
+    )
+    return None if has_dashboard else "render_dashboard"
 
 
 def build_fixed_agent(agent_model: str = AGENT_MODEL):
@@ -196,7 +275,11 @@ def build_fixed_agent(agent_model: str = AGENT_MODEL):
         # CopilotKitMiddleware forwards frontend tools + agent context (e.g.
         # useAgentContext payloads) to the LLM. MistralErrorMiddleware stays
         # after it so it sits closest to the model call.
-        middleware=[CopilotKitMiddleware(), MistralErrorMiddleware()],
+        middleware=[
+            CopilotKitMiddleware(),
+            PdfTurnRoutingMiddleware(_required_tool, NO_DOCUMENT_REPLY),
+            MistralErrorMiddleware(),
+        ],
         system_prompt=SYSTEM_PROMPT,
         checkpointer=BoundedMemorySaver(),
     )

@@ -6,7 +6,9 @@ their middlewares, so the step counts are those of production.
 """
 
 import asyncio
+import json
 
+import httpx
 import pytest
 from langchain_core.messages import (
     AIMessage,
@@ -20,27 +22,23 @@ from langgraph.errors import GraphRecursionError
 import main
 from scripts import measure
 from src import dynamic_agent, fixed_agent, pdf_tools
-from src.dynamic_agent import PdfTurnRoutingMiddleware, _required_tool
+from src.dynamic_agent import NO_DOCUMENT_REPLY, _required_tool
 from src.models import AGENT_RECURSION_LIMIT
+from src.routing import PdfTurnRoutingMiddleware
 from tests.fakes import ScriptedModel, ScriptedToolCaller
 from tests.test_generate_a2ui import _render_call
 
 ANSWER = '{"shape_hint":"text","title":"T","summary":"S","data":""}'
 QUERY = ("query_pdf", {"question": "Q?"})
 RENDER = ("generate_a2ui", {})
-DASHBOARD = (
-    "render_dashboard",
+DASHBOARD = ("render_dashboard", {"focus": "tout"})
+DASHBOARD_ANSWER = json.dumps(
     {
-        "eyebrow": "E",
         "title": "T",
-        "subtitle": "S",
-        "kpis": [{"label": "l", "value": "v", "delta": "", "caption": "c"}] * 4,
-        "trend": [{"label": "a", "value": 1.0}],
-        "share": [{"label": "a", "value": 1.0}],
-        "rows": [{"name": "n", "category": "c", "value": "v", "delta": ""}],
+        "kpis": [{"label": "l", "value": "n/a", "delta": "", "caption": "c"}],
         "scope_options": [{"label": "a", "value": "a"}],
         "scope_selected": "a",
-    },
+    }
 )
 
 
@@ -122,10 +120,16 @@ def test_endless_query_loop_runs_the_extractor_twice_then_hits_the_limit(monkeyp
     assert len(extractor.calls) == 2
 
 
+def _fixed_graph(monkeypatch, model: ScriptedToolCaller):
+    extractor = ScriptedModel([AIMessage(content=DASHBOARD_ANSWER)] * 5)
+    monkeypatch.setattr(fixed_agent, "agent_chat_model", lambda _model: model)
+    monkeypatch.setattr(pdf_tools, "_EXTRACTOR", extractor)
+    return fixed_agent.build_fixed_agent(), extractor
+
+
 def test_fixed_turn_fits_under_the_limit(monkeypatch):
     model = ScriptedToolCaller(script=[DASHBOARD])
-    monkeypatch.setattr(fixed_agent, "agent_chat_model", lambda _model: model)
-    graph = fixed_agent.build_fixed_agent()
+    graph, extractor = _fixed_graph(monkeypatch, model)
 
     result = _play(graph)
 
@@ -133,7 +137,9 @@ def test_fixed_turn_fits_under_the_limit(monkeypatch):
         isinstance(m, ToolMessage) and m.name == "render_dashboard"
         for m in result["messages"]
     )
-    assert len(model.calls) == 2
+    # return_direct ends the turn with the surface: no second model call.
+    assert len(model.calls) == 1
+    assert len(extractor.calls) == 1
 
 
 def test_server_and_measure_script_use_the_shared_limit(monkeypatch):
@@ -159,11 +165,6 @@ def _query_call(call_id: str = "q1") -> AIMessage:
         content="",
         tool_calls=[{"name": "query_pdf", "args": {"question": "Q?"}, "id": call_id}],
     )
-
-
-def test_required_tool_without_a_document_forbids_every_tool():
-    assert _required_tool([HumanMessage(content="Bonjour")]) == "none"
-    assert _required_tool([]) == "none"
 
 
 def test_required_tool_asks_for_query_pdf_first_then_the_render():
@@ -201,7 +202,7 @@ class _Request:
 
 
 def _seen_by_handler(messages, *, use_async: bool):
-    middleware = PdfTurnRoutingMiddleware()
+    middleware = PdfTurnRoutingMiddleware(_required_tool, NO_DOCUMENT_REPLY)
     seen = []
 
     def handler(request):
@@ -226,13 +227,6 @@ def test_middleware_forces_the_required_tool(use_async):
     assert seen.tool_choice == "query_pdf"
 
 
-@pytest.mark.parametrize("use_async", [False, True])
-def test_middleware_forbids_tools_without_a_document(use_async):
-    request_messages = [HumanMessage(content="Bonjour")]
-    seen = _seen_by_handler(request_messages, use_async=use_async)
-    assert seen.tool_choice == "none"
-
-
 def test_real_graph_forces_query_pdf_then_the_render_on_each_turn(monkeypatch):
     model = ScriptedToolCaller(script=[QUERY, RENDER, QUERY, RENDER])
     graph, _ = _dynamic_graph(monkeypatch, model)
@@ -242,17 +236,97 @@ def test_real_graph_forces_query_pdf_then_the_render_on_each_turn(monkeypatch):
     assert model.forced == ["query_pdf", "generate_a2ui", "query_pdf", "generate_a2ui"]
 
 
-def test_real_graph_forbids_tools_without_a_document(monkeypatch):
-    model = ScriptedToolCaller(script=[])
-    graph, _ = _dynamic_graph(monkeypatch, model)
+def test_dynamic_graph_without_a_document_ends_on_the_sentence_with_no_model_call(
+    monkeypatch,
+):
+    model = ScriptedToolCaller(script=[QUERY])
+    graph, extractor = _dynamic_graph(monkeypatch, model)
 
-    _play(graph, messages=[HumanMessage(content="Bonjour")])
+    result = _play(graph, messages=[HumanMessage(content="Bonjour")])
 
-    assert model.forced == ["none"]
+    assert model.calls == [] and extractor.calls == []
+    assert result["messages"][-1].content == "Joignez un PDF et je génère la réponse."
 
 
-def test_fixed_graph_is_not_forced(monkeypatch):
+def test_fixed_graph_without_a_document_ends_on_the_sentence_with_no_model_call(
+    monkeypatch,
+):
     model = ScriptedToolCaller(script=[DASHBOARD])
-    monkeypatch.setattr(fixed_agent, "agent_chat_model", lambda _model: model)
-    _play(fixed_agent.build_fixed_agent())
-    assert set(model.forced) == {None}
+    graph, extractor = _fixed_graph(monkeypatch, model)
+
+    result = _play(graph, messages=[HumanMessage(content="Bonjour")])
+
+    assert model.calls == [] and extractor.calls == []
+    assert (
+        result["messages"][-1].content
+        == "Joignez un PDF et je génère le tableau de bord."
+    )
+
+
+def test_fixed_graph_imposes_the_first_dashboard_then_leaves_the_model_free(
+    monkeypatch,
+):
+    model = ScriptedToolCaller(script=[DASHBOARD])
+    graph, _ = _fixed_graph(monkeypatch, model)
+
+    _play(graph)
+    _play(graph, messages=[HumanMessage(content="Et la marge ?")])
+
+    assert model.forced == ["render_dashboard", None]
+
+
+def test_middleware_leaves_the_request_alone_when_no_tool_is_required():
+    middleware = PdfTurnRoutingMiddleware(lambda _messages: None, "reply")
+    request = _Request([_attached()], tool_choice="auto")
+
+    seen = []
+    middleware.wrap_model_call(request, lambda r: seen.append(r))
+
+    assert seen == [request]
+
+
+# --- Provider errors inside a return_direct tool ---------------------------
+
+
+def _quota_error() -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://api.mistral.ai")
+    response = httpx.Response(429, request=request)
+    return httpx.HTTPStatusError("429", request=request, response=response)
+
+
+def _assert_ends_on_the_french_message(result: dict) -> None:
+    last = result["messages"][-1]
+    assert isinstance(last, AIMessage)
+    assert last.content == "Quota Mistral atteint, réessayez dans un instant."
+    # Said once: the tool result carries the prefixed copy, nothing else does.
+    texts = [m.content for m in result["messages"] if isinstance(m, AIMessage)]
+    assert texts.count(last.content) == 1
+
+
+def test_fixed_graph_answers_a_provider_error_of_the_extractor_in_the_chat(
+    monkeypatch,
+):
+    model = ScriptedToolCaller(script=[DASHBOARD])
+    graph, _ = _fixed_graph(monkeypatch, model)
+    monkeypatch.setattr(pdf_tools, "_EXTRACTOR", ScriptedModel([_quota_error()]))
+
+    _assert_ends_on_the_french_message(_play(graph))
+
+
+def test_dynamic_graph_answers_a_provider_error_of_the_render_model_in_the_chat(
+    monkeypatch,
+):
+    model = ScriptedToolCaller(script=[QUERY, RENDER])
+    graph, _ = _dynamic_graph(monkeypatch, model)
+    monkeypatch.setattr(dynamic_agent, "_RENDER_MODEL", ScriptedModel([_quota_error()]))
+
+    _assert_ends_on_the_french_message(_play(graph))
+
+
+def test_dynamic_graph_answers_a_provider_error_of_the_extractor_once(monkeypatch):
+    # query_pdf is not return_direct: the existing path (before_model) ends the run.
+    model = ScriptedToolCaller(script=[QUERY, RENDER])
+    graph, _ = _dynamic_graph(monkeypatch, model)
+    monkeypatch.setattr(pdf_tools, "_EXTRACTOR", ScriptedModel([_quota_error()]))
+
+    _assert_ends_on_the_french_message(_play(graph))

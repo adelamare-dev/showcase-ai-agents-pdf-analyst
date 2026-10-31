@@ -23,7 +23,7 @@ export const TOOL_STEPS = {
     running: "Construction du tableau de bord…",
     done: "Tableau de bord prêt",
     failed: "Tableau de bord interrompu",
-    model: "Ministral 3B",
+    model: "Ministral 8B",
   },
 } as const;
 

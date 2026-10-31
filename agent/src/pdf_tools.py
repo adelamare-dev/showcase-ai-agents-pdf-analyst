@@ -26,7 +26,7 @@ DOCUMENT_OMITTED = (
 
 # Returned (and shown to the user as is) when the extractor's answer is unusable.
 # Another attempt at temperature 0 would give the same output, so there is none.
-_EXTRACTION_FAILED = {
+EXTRACTION_FAILED = {
     "shape_hint": "text",
     "title": "Extraction impossible",
     "summary": (
@@ -37,7 +37,8 @@ _EXTRACTION_FAILED = {
     "failed": True,
 }
 
-_EXTRACTION_RULES = """\
+# Also reused by the /fixed agent, whose prompts read the document too.
+READING_RULES = """\
 ## Reading the document
 
 The text was extracted from a PDF. Each line is one row of the page and " | "
@@ -50,13 +51,19 @@ separates the cells of a row.
 - Lines of evenly spaced numbers (1,0 then 0,8 then 0,6...) and lines of many
   periods (T1-22 T2-22 T3-22...) are chart axes, not data: never report them.
 - Report only values written in the document. Never estimate or fill a gap.
+"""
 
+# Shared by every prompt that asks the extractor for JSON.
+JSON_NUMBER_RULE = """\
+A JSON number uses a dot and
+nothing else: write 0.4, never 0,4. French formatting applies to strings only.
+"""
+
+_JSON_RULES = f"""\
 ## JSON rules
 
 Keep the JSON keys exactly as shown, in English. `data` is exactly the payload
-of the chosen shape, with no wrapper object. A JSON number uses a dot and
-nothing else: write 0.4, never 0,4. French formatting applies to strings only.
-"""
+of the chosen shape, with no wrapper object. {JSON_NUMBER_RULE}"""
 
 
 class Kpi(TypedDict):
@@ -216,6 +223,19 @@ def extraction_failed(messages: list[AnyMessage]) -> bool:
     return False
 
 
+def extract_json(system: str, user: str) -> str | None:
+    """Ask the extractor and return its answer as JSON object text, or None.
+
+    None means the answer is unusable (not JSON, or not an object). Provider
+    exceptions are not caught: they reach `MistralErrorMiddleware`.
+    """
+    out = _EXTRACTOR.invoke([("system", system), ("user", user)])
+    raw = _strip_to_json(
+        out.content if isinstance(out.content, str) else str(out.content)
+    )
+    return _extraction_json(raw)
+
+
 @tool
 def extract_dashboard_data(pdf_text: str, document_name: str) -> str:
     """Parse the supplied PDF text and return a JSON payload shaped for the
@@ -339,7 +359,7 @@ def query_pdf(question: str, runtime: ToolRuntime[Any]) -> str:
         "- 'table' → { columns:[{key,label}], rows:[{...}] }  for lists\n"
         "- 'text'  → string                       for narrative answers\n\n"
         f"{FRENCH_OUTPUT_RULE}\n\n"
-        f"{_EXTRACTION_RULES}"
+        f"{READING_RULES}\n{_JSON_RULES}"
     )
     user = f"""Question: {question}
 
@@ -356,8 +376,4 @@ Return JSON shaped like:
   "data": <payload above>
 }}
 """
-    out = _EXTRACTOR.invoke([("system", sys), ("user", user)])
-    raw = _strip_to_json(
-        out.content if isinstance(out.content, str) else str(out.content)
-    )
-    return _extraction_json(raw) or json.dumps(_EXTRACTION_FAILED)
+    return extract_json(sys, user) or json.dumps(EXTRACTION_FAILED)
