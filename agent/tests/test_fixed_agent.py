@@ -169,6 +169,31 @@ def test_the_extraction_prompt_carries_the_shared_rules():
     assert "Never compute" in prompt
 
 
+def test_the_dashboard_extraction_asks_for_json_mode(monkeypatch):
+    stub = _extractor(monkeypatch, ANSWER)
+    _call([_message()])
+
+    assert stub.bound == [{"response_format": {"type": "json_object"}}]
+
+
+def test_the_extraction_prompt_asks_for_numbers_in_trend_and_share():
+    prompt = fixed_agent.DASHBOARD_EXTRACTION_PROMPT
+    assert prompt.count('"value" is a JSON number, not a string.') == 2
+
+
+def test_the_true_insee_row_sent_as_numbers_reaches_the_trend_chart(monkeypatch):
+    raw = (
+        '{"title": "T", "trend": [{"label": "2025T3", "value": 0.4}, '
+        '{"label": "2025T4", "value": 0.3}, {"label": "2026T1", "value": -0.2}, '
+        '{"label": "2026T2", "value": 0.0}]}'
+    )
+    components, data = _render(monkeypatch, raw)
+
+    assert data["trend"] == TREND
+    assert "trend-chart" in _ids(components)
+    _assert_consistent(components, data)
+
+
 def test_a_hallucinated_trend_is_dropped_and_the_other_blocks_stay(monkeypatch):
     observed = [{"label": "T2 2025", "value": 0.5}, {"label": "T3 2025", "value": 0.3}]
     components, data = _render(monkeypatch, {**ANSWER, "trend": observed})
@@ -314,10 +339,12 @@ def test_no_stat_card_hard_codes_a_tone():
 # --- agent prompt and routing ------------------------------------------------
 
 
-def test_the_agent_prompt_names_its_tool_chip_events_and_shared_rules():
+def test_the_agent_prompt_names_its_tool_chip_clicks_and_shared_rules():
     prompt = fixed_agent.SYSTEM_PROMPT
     assert "render_dashboard(focus=" in prompt
-    assert "log_a2ui_event" in prompt
+    assert "select_chip" in prompt
+    assert "log_a2ui_event" not in prompt
+    assert "fy24" not in prompt
     assert "Dynamic" in prompt
     assert pdf_tools.READING_RULES in prompt
     assert FRENCH_OUTPUT_RULE in prompt

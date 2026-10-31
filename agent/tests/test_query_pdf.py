@@ -49,6 +49,11 @@ def test_extractor_receives_the_whole_document(monkeypatch):
     assert body in _user_prompt(stub)
 
 
+def test_the_extractor_is_not_put_in_json_mode(monkeypatch):
+    stub, _ = _query(monkeypatch, [HumanMessage(content=_doc("BODY"))])
+    assert stub.bound == []
+
+
 def test_most_recent_document_wins(monkeypatch):
     messages = [
         HumanMessage(content=_doc("OLD-BODY", "old.pdf")),

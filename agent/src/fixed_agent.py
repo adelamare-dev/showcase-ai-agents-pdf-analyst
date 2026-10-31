@@ -121,10 +121,12 @@ it. Return ONLY one JSON object, no prose, no markdown fences, with these keys:
   * "caption" is where the comparison or context sentence goes (about 80
     characters at most).
 - "trend": a list of {{"label", "value"}} points. Only one row of a table, with
-  its periods copied exactly from the header, at least 2 points. Otherwise [].
+  its periods copied exactly from the header, at least 2 points.
+  "value" is a JSON number, not a string. Otherwise [].
 - "share": a list of {{"label", "value"}} slices. Only if the document itself
   gives the parts of one whole. Contributions to growth, variations and rates
-  are not parts. Never compute a share. Otherwise [].
+  are not parts. Never compute a share.
+  "value" is a JSON number, not a string. Otherwise [].
 - "rows": up to 8 table rows {{"name", "category", "value", "delta"}}, only if
   the document has such a list. The "delta" rule above applies. Otherwise [].
 - "scope_options": 2 to 6 chips {{"label", "value"}} the user can click to
@@ -189,14 +191,16 @@ def render_dashboard(focus: str, runtime: ToolRuntime[Any]) -> str:
     """Render the interactive dashboard for the loaded PDF.
 
     `focus` is what to center the dashboard on: the user's request, or the
-    label of the chip they clicked. The tool reads the document itself, so
+    value of the chip they clicked. The tool reads the document itself, so
     never copy the document text into the call. Call it once per turn.
     """
     document = latest_document_text(runtime.state["messages"])
     if document is None:
         return _failure_surface()
     raw = extract_json(
-        DASHBOARD_EXTRACTION_PROMPT, _extraction_user_prompt(focus, document)
+        DASHBOARD_EXTRACTION_PROMPT,
+        _extraction_user_prompt(focus, document),
+        json_mode=True,
     )
     if raw is None:
         return _failure_surface()
@@ -238,11 +242,13 @@ You answer questions about the user's attached PDF. You own one tool,
 `render_dashboard`, which builds the dashboard from the document: it reads the
 document itself, so pass it only a focus.
 
-- To render or re-render the dashboard, call `render_dashboard(focus=...)`
-  with what to center it on: the user's request, or the chip they clicked.
-  A chip click reaches you as a `log_a2ui_event` tool result like:
-      User performed action "select_chip" on surface "pdf-dashboard".
-      Context: {{"value": "fy24", "label": "Scope"}}
+- The first dashboard is rendered by calling `render_dashboard(focus=...)` with
+  what to center it on: the user's request.
+- A chip click is the only thing that re-renders after the first dashboard. You
+  recognize it by a tool result starting with `User performed action
+  "select_chip"`, whose context holds the chip's value: call `render_dashboard`
+  with that value as the focus. A message with no such result is a question:
+  answer it in chat, and do not call the tool.
 - To answer an analytical question ("what was operating margin?"), reply in
   the chat in 1-3 sentences, using only the document.
 - If the user wants a brand-new visualization the dashboard does not cover

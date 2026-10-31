@@ -204,13 +204,20 @@ def extraction_failed(messages: list[AnyMessage]) -> bool:
     return False
 
 
-def extract_json(system: str, user: str) -> str | None:
+def extract_json(system: str, user: str, *, json_mode: bool = False) -> str | None:
     """Ask the extractor and return its answer as JSON object text, or None.
 
     None means the answer is unusable (not JSON, or not an object). Provider
-    exceptions are not caught: they reach `MistralErrorMiddleware`.
+    exceptions are not caught: they reach `MistralErrorMiddleware`. `json_mode`
+    has the provider enforce a JSON object: the 8B leaves out commas between
+    keys, which the repair in `_extraction_json` cannot restore.
     """
-    out = _EXTRACTOR.invoke([("system", system), ("user", user)])
+    model = (
+        _EXTRACTOR.bind(response_format={"type": "json_object"})
+        if json_mode
+        else _EXTRACTOR
+    )
+    out = model.invoke([("system", system), ("user", user)])
     raw = _strip_to_json(
         out.content if isinstance(out.content, str) else str(out.content)
     )

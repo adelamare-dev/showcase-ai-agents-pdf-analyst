@@ -15,6 +15,12 @@ class ScriptedModel:
         self.responses = list(responses)
         self.calls: list = []
         self.bind_kwargs: dict = {}
+        # The keyword arguments of each `bind` call, in order.
+        self.bound: list[dict] = []
+
+    def bind(self, **kwargs) -> "ScriptedModel":
+        self.bound.append(kwargs)
+        return self
 
     def bind_tools(self, tools, **kwargs) -> "ScriptedModel":
         self.bind_kwargs = kwargs
