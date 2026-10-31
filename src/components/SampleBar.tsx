@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
 import { preparePdf, type LoadedPdf } from "@/lib/pdf";
+import { withSampleDocument } from "@/lib/sample-document";
 import type { Sample } from "@/lib/samples";
 
 type Doc = { sample: Sample; value: string; loaded: LoadedPdf };
@@ -11,8 +12,9 @@ const BUTTON =
   "text-left text-[12px] px-2.5 py-1 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--bg)] disabled:opacity-50 disabled:cursor-not-allowed";
 
 /** One-click sample documents, then clickable questions for the loaded one.
- *  The document is sent together with the clicked question as a single user
- *  message, in the same shape the composer produces for an uploaded PDF. */
+ *  The loaded document leaves with the next user message, clicked or typed:
+ *  a run subscriber attaches it, in the same shape the composer produces for an
+ *  uploaded PDF. */
 export function SampleBar({
   agentId,
   samples,
@@ -36,6 +38,22 @@ export function SampleBar({
   const busy = agent.isRunning;
   const showSuggestions = doc !== null && doc.loaded === current;
 
+  // Runs before every agent run, so it covers the composer as well as the
+  // suggestions. It stays inert once the page shows another document (composer
+  // upload) and `withSampleDocument` leaves a thread that already has one alone.
+  // The effect sits above the early return below: it keeps running once the
+  // thread has messages, and does nothing on later turns.
+  useEffect(() => {
+    if (!isReady || !doc || doc.loaded !== current) return;
+    const { unsubscribe } = agent.subscribe({
+      onRunInitialized: ({ messages }) => {
+        const next = withSampleDocument(messages, doc);
+        return next ? { messages: next } : undefined;
+      },
+    });
+    return unsubscribe;
+  }, [agent, isReady, doc, current]);
+
   async function load(sample: Sample) {
     setError(null);
     try {
@@ -54,22 +72,10 @@ export function SampleBar({
 
   async function ask(question: string) {
     if (!doc || busy || !isReady) return;
-    const { value, loaded } = doc;
     agent.addMessage({
       id: crypto.randomUUID(),
       role: "user",
-      content: [
-        { type: "text", text: question },
-        {
-          type: "document",
-          source: { type: "data", value, mimeType: "text/plain" },
-          metadata: {
-            filename: loaded.filename,
-            pages: loaded.pages,
-            originalMime: "application/pdf",
-          },
-        },
-      ],
+      content: question,
     });
     try {
       await copilotkit.runAgent({ agent });
@@ -117,7 +123,7 @@ export function SampleBar({
             </button>
           ))}
           <span className="text-[11.5px] text-[var(--ink-2)]">
-            Cliquez une question pour l&rsquo;envoyer avec le document.
+            Cliquez une question ou posez la vôtre : le document part avec le message.
           </span>
         </div>
       )}
