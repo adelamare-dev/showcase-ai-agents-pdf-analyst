@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/c053d2e8-1d40-43cb-8c5a-8e5c121b851f
 
 **Three routes:**
 
-- **`/fixed`** — hand-authored JSON dashboard. The agent only extracts the data (KPIs, trend, segment splits, table rows) and fills the slots. Predictable layout, brand-locked, single LLM call per turn. Best when the shape of the answer is known up front.
+- **`/fixed`** — hand-authored JSON dashboard. An 8B extractor reads the document (KPIs, trend, segment splits, table rows) and fills the slots, and the code keeps only what the document supports. Predictable layout, brand-locked. The first turn on a document always renders the dashboard. Best when the shape of the answer is known up front.
 - **`/dynamic`** — no pre-written layout. The agent reads the question, picks components from the catalog, and composes the surface on the fly. A net-income query lands as a single StatCard; a segment breakdown becomes a DonutChart; a research-paper summary composes Overline + Heading + Text + Callout + BulletList. Best when the right answer's _form_ varies with the question.
 - **`/catalog`** — every component rendered live, filterable by group (Layout, Content, Data viz, Interactive). Doubles as a sanity check on the renderers and a reference for what the agent is allowed to draw from.
 
@@ -87,10 +87,11 @@ a2ui-pdf-analyst/
 │   └── lib/
 │       ├── agent-steps.ts          → chat step labels per tool, model names, tool-failure check
 │       ├── chat-labels.ts          → French labels for the chat chrome
-│       ├── format.ts               → fr-FR number formatting and amount parsing
+│       ├── format.ts               → fr-FR number formatting and delta tone
 │       ├── upload-errors.ts        → French messages for attachment errors
 │       ├── pdf.ts                  → client-side PDF text extraction (pdfjs-dist) + text cap
 │       ├── use-pdf-attachments.ts  → attachment handling, truncation note
+│       ├── sample-document.ts      → attaches a sample PDF to the first message of a thread
 │       └── samples.ts              → sample catalogue and French suggested questions
 └── agent/                    → Python · LangChain · LangGraph · FastAPI · AG-UI
     ├── main.py               → /fixed and /dynamic FastAPI endpoints (server-to-server only)
@@ -101,7 +102,9 @@ a2ui-pdf-analyst/
         ├── models.py         → model IDs, temperature, retry and timeout (single home); stream adapter for the agent model
         ├── locale.py         → output-language rule shared by the agent prompts (French, fr-FR formats)
         ├── catalog.py        → CATALOG_ID + system-prompt fragment listing components
-        ├── fixed_agent.py    → render_dashboard backend tool
+        ├── fixed_agent.py    → render_dashboard backend tool (8B extractor fills the dashboard)
+        ├── dashboard_checks.py → what of the extractor's answer reaches the /fixed screen
+        ├── routing.py        → PdfTurnRoutingMiddleware: imposed tool per model call, fixed reply without a document
         ├── dynamic_agent.py  → query_pdf + generate_a2ui tools
         ├── pdf_tools.py      → query_pdf: question → structured JSON answer, document read from state
         ├── multimodal_middleware.py → ag-ui-langgraph patch so PDF text survives the trip to the model API
@@ -116,15 +119,15 @@ a2ui-pdf-analyst/
 
 **Live steps** — each tool call renders as a one-line step in the chat (`src/components/ToolStep.tsx`, labels in `src/lib/agent-steps.ts`) showing the model that runs it. Mistral sends a whole tool call in a single chunk, which `ag-ui-langgraph` would drop; the agent model is therefore built by `agent_chat_model()` in `agent/src/models.py`, a stream adapter that splits the call into start, arguments and end so the step appears while the tool runs.
 
-**Local hardening** — the agent listens on `127.0.0.1` and refuses any request that carries an `Origin` header, so a web page open in your browser cannot run it and spend your Mistral quota; only the Next.js runtime, server to server, calls it. A Content-Security-Policy (`next.config.ts`) only lets the browser load images from the app itself, and chat replies are rendered without images, so a prompt-injected PDF cannot leak data through an image URL. pdf.js parses PDFs with `isEvalSupported: false`, and its worker is served by the app, so an upload contacts no third party. A turn is bounded too: on `/dynamic` the code imposes its one valid course instead of asking the model (`PdfTurnRoutingMiddleware`, `agent/src/dynamic_agent.py`), so a document cannot talk the agent into looping, tool calls run one at a time, `query_pdf` runs at most twice even if the provider ignored that routing, and the agent keeps at most 32 conversations in memory.
+**Local hardening** — the agent listens on `127.0.0.1` and refuses any request that carries an `Origin` header, so a web page open in your browser cannot run it and spend your Mistral quota; only the Next.js runtime, server to server, calls it. A Content-Security-Policy (`next.config.ts`) only lets the browser load images from the app itself, and chat replies are rendered without images, so a prompt-injected PDF cannot leak data through an image URL. pdf.js parses PDFs with `isEvalSupported: false`, and its worker is served by the app, so an upload contacts no third party. A turn is bounded too: on `/dynamic` the code imposes its one valid course instead of asking the model (`PdfTurnRoutingMiddleware`, `agent/src/routing.py`), so a document cannot talk the agent into looping, tool calls run one at a time, `query_pdf` runs at most twice even if the provider ignored that routing, and the agent keeps at most 32 conversations in memory.
 
 **Language** — the agent answers and writes surface text in French; the rule lives in `agent/src/locale.py`. Numbers are shown fr-FR by `src/lib/format.ts`.
 
-**Samples** — on `/fixed` and `/dynamic`, "Essayer un exemple" loads a bundled PDF and shows clickable French suggested questions that send the question together with the document. Suggestions appear only before the first message and only while the sample is the loaded document.
+**Samples** — on `/fixed` and `/dynamic`, "Essayer un exemple" loads a bundled PDF and shows clickable French suggested questions that send the question together with the document. The sample is attached by a subscriber to the run (`withSampleDocument`, `src/lib/sample-document.ts`), so a question typed in the composer carries it too, but only on the first message of a thread: after a run the thread already holds the document as `[Document: …]` text. A PDF uploaded in the composer wins. Suggestions appear only before the first message and only while the sample is the loaded document.
 
-**Fixed schema (`/fixed`)** — `agent/src/a2ui/schemas/dashboard.json` is a static A2UI component tree the agent never touches. The `render_dashboard` tool takes typed arguments (KPIs, trend, share, rows, scope chips), packages them as A2UI `update_data_model` ops, and the existing tree picks them up via `{path}` bindings. One LLM pass, one tool call, surface streams in.
+**Fixed schema (`/fixed`)** — `agent/src/a2ui/schemas/dashboard.json` is a static A2UI component tree the agent never touches. The agent model only routes: it calls `render_dashboard(focus)`, which is `return_direct` and takes no typed data arguments. The 8B extractor reads the document and returns one JSON object (KPIs, trend, share, rows, scope chips). `agent/src/dashboard_checks.py` drops what the document does not write and the template loses the blocks that have no data; the rest goes out as A2UI `update_data_model` ops that the tree picks up via `{path}` bindings. If nothing usable remains or the extraction fails, the surface says "Extraction impossible". Without a document the turn ends on a fixed sentence with no model call.
 
-**Dynamic schema (`/dynamic`)** — five steps per turn. Once a document is attached, each model call has its tool imposed by `tool_choice`; without one, no tool is allowed and the agent asks for a PDF.
+**Dynamic schema (`/dynamic`)** — five steps per turn. Once a document is attached, each model call has its tool imposed by `tool_choice`; without one, the turn ends on a fixed sentence asking for a PDF, with no model call.
 
 1. User attaches a PDF and asks a question. Frontend inlines the PDF text into the message.
 2. Agent calls `query_pdf(question)` → the tool reads the latest attached document from the graph state, and a sub-LLM returns structured JSON: `shape_hint`, `title`, `summary`, `data`. If its answer is unusable, the surface says so instead of guessing.
@@ -159,7 +162,7 @@ On `/fixed` after attaching a PDF:
 
 | Ask the agent                               | What happens                                                           |
 | ------------------------------------------- | ---------------------------------------------------------------------- |
-| `Affiche le tableau de bord.`               | full dashboard with KPIs, trend chart, share donut, table, scope chips |
+| `Affiche le tableau de bord.`               | dashboard with the blocks the document supports (KPIs, trend chart, share donut, table, scope chips) |
 | `Passe à l'exercice 2024.` (or click the chip "Exercice 2024") | re-renders the same dashboard with fiscal-year data |
 
 ## Development
@@ -185,4 +188,4 @@ Without `--dry-run`, `scripts/measure.py` makes real Mistral calls (at most 12 t
 | Frontend       | Next.js 16 · React 19 · Tailwind v4 · TypeScript · `@copilotkit/react-core/v2` · `@copilotkit/a2ui-renderer` · `pdfjs-dist` · Recharts |
 | Runtime bridge | `@copilotkit/runtime/v2` · `@ag-ui/client` (HttpAgent)                                                                                 |
 | Backend        | Python 3.12 · FastAPI · `ag-ui-langgraph` · `copilotkit` (Python SDK) · `langchain` agents + LangGraph · `langchain-mistralai`        |
-| Model          | Ministral 3 3B (`ministral-3b-2512`) for the main agents; Ministral 3 8B (`ministral-8b-2512`) for `query_pdf` and `generate_a2ui`     |
+| Model          | Ministral 3 3B (`ministral-3b-2512`) for the main agents; Ministral 3 8B (`ministral-8b-2512`) for `query_pdf`, `generate_a2ui` and the `/fixed` extractor |
