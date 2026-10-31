@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, TypedDict
+from typing import Any
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
@@ -64,25 +64,6 @@ _JSON_RULES = f"""\
 
 Keep the JSON keys exactly as shown, in English. `data` is exactly the payload
 of the chosen shape, with no wrapper object. {JSON_NUMBER_RULE}"""
-
-
-class Kpi(TypedDict):
-    label: str
-    value: str
-    delta: str
-    caption: str
-
-
-class Point(TypedDict):
-    label: str
-    value: float
-
-
-class Row(TypedDict, total=False):
-    name: str
-    category: str
-    value: str
-    delta: str
 
 
 def _strip_to_json(text: str) -> str:
@@ -234,81 +215,6 @@ def extract_json(system: str, user: str) -> str | None:
         out.content if isinstance(out.content, str) else str(out.content)
     )
     return _extraction_json(raw)
-
-
-@tool
-def extract_dashboard_data(pdf_text: str, document_name: str) -> str:
-    """Parse the supplied PDF text and return a JSON payload shaped for the
-    fixed dashboard schema.
-
-    The PDF text comes from the user's most recent chat attachment.
-
-    Returns a JSON string with this exact shape:
-      {
-        "eyebrow":  "...short ALL-CAPS context, e.g. 'Q1 2025 · SALES REPORT'",
-        "title":    "...short headline title (<= 8 words)",
-        "subtitle": "...one-sentence summary",
-        "kpis":     [{label,value,delta,caption}, x4],
-        "trend":    [{label,value}, x6-12],
-        "share":    [{label,value}, x3-5],
-        "rows":     [{name,category,value,delta}, x5-8]
-      }
-    If a field genuinely doesn't appear in the PDF, return a sensible "n/a"
-    string for KPI values and an empty list for series. Never invent numbers.
-    """
-    sys = (
-        "You are a careful data extractor. Read the PDF text and return ONLY "
-        "a JSON object with the exact shape requested. No prose, no markdown "
-        "fences. Use only numbers that appear in the document. "
-        "If exact values are unclear, use 'n/a' for KPI values.\n\n"
-        f"{FRENCH_OUTPUT_RULE}"
-    )
-    user = f"""\
-Document name: {document_name}
-
-PDF text (truncated to first 30k chars):
-\"\"\"
-{pdf_text[:30000]}
-\"\"\"
-
-Return JSON with this shape:
-{{
-  "eyebrow": "string (short, ALL CAPS)",
-  "title": "string (<=8 words)",
-  "subtitle": "string (one sentence)",
-  "kpis": [{{"label": "...", "value": "...", "delta": "+X%|-X%|", "caption": "..."}}, ...],   // exactly 4
-  "trend": [{{"label": "Jan", "value": 12.3}}, ...],                                          // 6-12 points
-  "share": [{{"label": "Region", "value": 42}}, ...],                                          // 3-5 slices
-  "rows": [{{"name": "...", "category": "...", "value": "...", "delta": "+X%"}}, ...]         // 5-8 rows
-}}
-Return ONLY the JSON object.
-"""
-    out = _EXTRACTOR.invoke([("system", sys), ("user", user)])
-    raw = _strip_to_json(
-        out.content if isinstance(out.content, str) else str(out.content)
-    )
-    # Validate. fall back to a tiny placeholder if the LLM produced invalid JSON.
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        data = {
-            "eyebrow": "DOCUMENT",
-            "title": document_name or "Untitled",
-            "subtitle": "Could not extract structured data from this document.",
-            "kpis": [
-                {
-                    "label": "Status",
-                    "value": "n/a",
-                    "delta": "",
-                    "caption": "extraction failed",
-                }
-            ]
-            * 4,
-            "trend": [],
-            "share": [],
-            "rows": [],
-        }
-    return json.dumps(data)
 
 
 @tool
