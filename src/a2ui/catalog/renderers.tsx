@@ -21,10 +21,10 @@ import {
 } from "recharts";
 import type { RendererProps } from "@copilotkit/a2ui-renderer";
 import {
-  autoDelta,
   formatCompact,
   formatPercent,
   formatTableNumber,
+  toneOfDelta,
 } from "@/lib/format";
 
 /* The runtime walks `{path}` bindings against the data model before
@@ -68,9 +68,9 @@ const condenseDelta = (raw: string): string => {
   const trimmed = raw.trim();
   if (trimmed.length <= 8) return trimmed;
   const patterns = [
-    /[+-]\s*\d+(?:[.,]\d+)?\s*%/,
+    /[+\-−]\s*\d+(?:[.,]\d+)?\s*%/,
     /\d+(?:[.,]\d+)?\s*%/,
-    /[+-]\s*\$?\d+(?:[.,]\d+)?\s*[KMB]?/i,
+    /[+\-−]\s*\$?\d+(?:[.,]\d+)?\s*[KMB]?/i,
     /\$?\d+(?:[.,]\d+)?\s*[KMB]?/i,
   ];
   for (const p of patterns) {
@@ -384,28 +384,13 @@ const StatCard = ({
   deltaTone?: "positive" | "negative" | "neutral";
   caption?: string;
 }>) => {
-  // Prefer the agent's delta. Fall back to auto-computing from value vs.
-  // the prior number in caption when the agent left delta blank.
-  const explicitDelta = hasMeaningfulDelta(props.delta)
+  // Only a delta the agent gave is shown; a missing one stays empty.
+  const finalDelta = hasMeaningfulDelta(props.delta)
     ? condenseDelta(props.delta!)
     : null;
-  const computedDelta = explicitDelta
-    ? null
-    : autoDelta(props.value, props.caption);
-  const finalDelta = explicitDelta ?? computedDelta;
-
-  // Derive tone from the sign of the computed delta when the agent
-  // didn't set deltaTone (or set it incorrectly relative to the actual
-  // movement). For explicit deltas, trust the agent's tone choice.
-  const inferredTone: "positive" | "negative" | "neutral" =
-    computedDelta?.startsWith("-")
-      ? "negative"
-      : computedDelta?.startsWith("+")
-        ? "positive"
-        : (props.deltaTone ?? "neutral");
-  const effectiveTone = explicitDelta
-    ? (props.deltaTone ?? "neutral")
-    : inferredTone;
+  const effectiveTone = finalDelta
+    ? (props.deltaTone ?? toneOfDelta(finalDelta))
+    : "neutral";
 
   const deltaClass =
     effectiveTone === "positive"
