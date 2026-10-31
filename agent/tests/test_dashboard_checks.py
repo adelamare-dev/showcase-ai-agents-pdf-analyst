@@ -122,6 +122,35 @@ def test_a_kpi_delta_longer_than_twelve_characters_is_blanked():
     assert checked_kpis([kpi], INSEE)[0]["delta"] == ""
 
 
+VARIATION_DOCUMENT = (
+    "Le taux de marge des sociétés non financières "
+    "il s'établit ainsi à 17,2 %, après 17,9 % au premier trimestre 2026.\n"
+    "Variations de stocks | -0,5 | -0,5 | 0,9 | -0,7 | 0,6 | -0,1\n"
+    "FBCF totale | 0,7 | 0,1 | -0,8 | -0,3 | 0,7 | -0,4\n"
+)
+
+
+def test_a_kpi_delta_computed_from_two_values_of_the_text_is_blanked():
+    # 0,7 exists in the document, but not on the line of 17,2.
+    kpi = _kpi(label="Taux", value="17,2 %", delta="-0,7 %")
+    assert checked_kpis([kpi], VARIATION_DOCUMENT)[0]["delta"] == ""
+
+
+def test_a_kpi_delta_on_the_line_of_its_value_is_kept():
+    kpi = _kpi(label="FBCF", value="-0,3 %", delta="-0,3 %")
+    assert checked_kpis([kpi], VARIATION_DOCUMENT)[0]["delta"] == "-0,3 %"
+
+
+def test_a_kpi_value_with_no_number_has_no_delta():
+    kpi = _kpi(value="n/a", delta="+0,3 %")
+    assert checked_kpis([kpi], INSEE)[0]["delta"] == ""
+
+
+def test_kpis_of_the_wrong_shape_raise_nothing_with_the_line_rule():
+    for raw in (None, "x", [None, 3, {"label": "a", "value": "1", "delta": 4}]):
+        assert isinstance(checked_kpis(raw, VARIATION_DOCUMENT), list)
+
+
 def test_kpis_are_cut_to_the_first_four():
     kpis = [_kpi(label=f"k{i}") for i in range(6)]
     assert [k["label"] for k in checked_kpis(kpis, INSEE)] == ["k0", "k1", "k2", "k3"]

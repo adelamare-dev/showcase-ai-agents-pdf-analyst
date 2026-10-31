@@ -85,9 +85,25 @@ def _checked_delta(delta: Any, known: set[float]) -> str:
     return delta if numbers and numbers <= known else ""
 
 
+def _delta_on_value_line(delta: str, value: str, lines: list[set[float]]) -> str:
+    """`delta` if its number and the value's sit on one line of the document.
+
+    `lines` holds the numbers of each line. A value with no number has no delta.
+    """
+    pair = numbers_in(delta) | numbers_in(value)
+    if not numbers_in(value) or not any(pair <= line for line in lines):
+        return ""
+    return delta
+
+
 def checked_kpis(raw: Any, document: str) -> list[dict[str, str]]:
-    """The first four KPIs whose value is written in the document."""
+    """The first four KPIs whose value is written in the document.
+
+    A delta is kept only when it sits on one line of the document with the
+    KPI's value: a difference the model computed from two values is not one.
+    """
     known = numbers_in(document)
+    lines = [numbers_in(line) for line in document.splitlines()]
     kpis = []
     for item in _dicts(raw):
         label, value = item.get("label"), item.get("value")
@@ -99,7 +115,9 @@ def checked_kpis(raw: Any, document: str) -> list[dict[str, str]]:
             {
                 "label": label,
                 "value": value,
-                "delta": _checked_delta(item.get("delta"), known),
+                "delta": _delta_on_value_line(
+                    _checked_delta(item.get("delta"), known), value, lines
+                ),
                 "caption": text_or_empty(item.get("caption")),
             }
         )
@@ -121,16 +139,14 @@ def checked_rows(raw: Any, document: str) -> list[dict[str, str]]:
             continue
         if not _all_written(value, known):
             continue
-        delta = _checked_delta(item.get("delta"), known)
-        pair = numbers_in(delta) | numbers_in(value)
-        if not numbers_in(value) or not any(pair <= line for line in lines):
-            delta = ""
         rows.append(
             {
                 "name": name,
                 "category": text_or_empty(item.get("category")),
                 "value": value,
-                "delta": delta,
+                "delta": _delta_on_value_line(
+                    _checked_delta(item.get("delta"), known), value, lines
+                ),
             }
         )
     return rows[:MAX_ROWS]
