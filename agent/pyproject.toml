@@ -1,6 +1,6 @@
 [project]
 name = "agent"
-version = "0.4.2"
+version = "0.5.0"
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "ag-ui-langgraph>=0.0.36",
